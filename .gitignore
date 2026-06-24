@@ -1,0 +1,13 @@
+# Prototype handoff files (not needed in the repo)
+extracted/
+*.zip
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp

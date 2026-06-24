@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ledger — Budget</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%233D6B4A'/%3E%3C/svg%3E">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="styles.css">
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- data.js is plain JS — loads fine over file:// -->
+  <script src="data.js"></script>
+
+  <!-- JSX inlined so the app works when opened directly (file://) as well as
+       when served over HTTP. Babel processes these in order at page load. -->
+
+  <script type="text/babel">
+/* ---- budget.jsx ---- */
+function BudgetScreen({ data, setData }) {
+  const [colMode,    setColMode]    = React.useState('all');
+  const [focusMonth, setFocusMonth] = React.useState(new Date().getMonth());
+  const [saved,      setSaved]      = React.useState(false);
+
+  const incomeMonthly = MONTHS.map((_, m) =>
+    sum(data.income.map(r => r.monthly[m]))
+  );
+  const incomeAnnual = sum(incomeMonthly);
+
+  const groupTotals = data.groups.map(g => {
+    const monthly = MONTHS.map((_, m) => sum(g.cats.map(c => c.monthly[m])));
+    return { id: g.id, monthly, annual: sum(monthly) };
+  });
+
+  const disbursementsMonthly = MONTHS.map((_, m) =>
+    sum(groupTotals.map(g => g.monthly[m]))
+  );
+  const disbursementsAnnual = sum(disbursementsMonthly);
+
+  const netMonthly = MONTHS.map((_, m) => incomeMonthly[m] - disbursementsMonthly[m]);
+  const netAnnual  = sum(netMonthly);
+
+  const beginning = [], ending = [];
+  let bal = +data.beginningBalance || 0;
+  MONTHS.forEach((_, m) => {
+    beginning.push(bal);
+    bal += netMonthly[m];
+    ending.push(bal);
+  });
+
+  const bucketAnnual = { needs: 0, wants: 0, save: 0, give: 0, unalloc: 0 };
+  data.groups.forEach(g => g.cats.forEach(c => {
+    const b = bucketAnnual[c.bucket] != null ? c.bucket : 'unalloc';
+    bucketAnnual[b] += sum(c.monthly);
+  }));
+  const bucketMonthlyAvg = Object.fromEntries(
+    Object.entries(bucketAnnual).map(([k, v]) => [k, v / 12])
+  );
+
+  const visibleMonths = React.useMemo(() => {
+    if (colMode === 'all') return MONTHS.map((_, i) => i);
+    if (colMode === 'quarter') {
+      const q = Math.floor(focusMonth / 3);
+      return [q*3, q*3+1, q*3+2];
+    }
+    return [focusMonth];
+  }, [colMode, focusMonth]);
+
+  const setIncomeCell  = (id, m, val) => setData(prev => ({
+    ...prev, income: prev.income.map(r =>
+      r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r)
+  }));
+  const setCatCell     = (gid, cid, m, val) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
+      ...g, cats: g.cats.map(c =>
+        c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) })
+    })
+  }));
+  const setIncomeName  = (id, name) => setData(prev => ({
+    ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r)
+  }));
+  const setCatName     = (gid, cid, name) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
+      ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name })
+    })
+  }));
+  const setGroupName   = (gid, name) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name })
+  }));
+  const cycleBucket    = (gid, cid) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
+      ...g, cats: g.cats.map(c => c.id !== cid ? c : {
+        ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length]
+      })
+    })
+  }));
+  const addIncome      = () => setData(prev => ({
+    ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }]
+  }));
+  const addCat         = (gid) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
+      ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }]
+    })
+  }));
+  const addGroup       = () => setData(prev => ({
+    ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }]
+  }));
+  const delIncome      = (id) => setData(prev => ({
+    ...prev, income: prev.income.filter(r => r.id !== id)
+  }));
+  const delCat         = (gid, cid) => setData(prev => ({
+    ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
+      ...g, cats: g.cats.filter(c => c.id !== cid)
+    })
+  }));
+  const delGroup       = (gid) => {
+    const g = data.groups.find(gr => gr.id === gid);
+    if (!g) return;
+    const msg = g.cats.length > 0
+      ? `Delete "${g.name}" and its ${g.cats.length} categor${g.cats.length === 1 ? 'y' : 'ies'}? This cannot be undone.`
+      : `Delete the "${g.name}" group?`;
+    if (!confirm(msg)) return;
+    setData(prev => ({ ...prev, groups: prev.groups.filter(gr => gr.id !== gid) }));
+  };
+  const setBeginning   = (v) => setData(prev => ({ ...prev, beginningBalance: v }));
+  const copyJan        = () => setData(prev => ({
+    ...prev,
+    income: prev.income.map(r => ({ ...r, monthly: arr12(r.monthly[0]) })),
+    groups: prev.groups.map(g => ({
+      ...g, cats: g.cats.map(c => ({ ...c, monthly: arr12(c.monthly[0]) }))
+    }))
+  }));
+
+  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1>{data.year} <em>cash budget</em></h1>
+          <div className="sub">
+            Estimate every dollar in and out, month by month. Click a colored dot to change a category's bucket.
+          </div>
+        </div>
+        <div className="actions">
+          <button className="btn ghost" onClick={copyJan}>Fill across from Jan</button>
+          <button className="btn primary" onClick={handleSave}>
+            {saved ? 'Saved ✓' : 'Save budget'}
+          </button>
+        </div>
+      </div>
+
+      <div className="kpis">
+        <Kpi label="Annual income"        value={incomeAnnual} />
+        <Kpi label="Annual outflow"       value={disbursementsAnnual} />
+        <Kpi label="Net to balance sheet" value={netAnnual} tone={netAnnual < 0 ? 'neg' : 'pos'} />
+        <Kpi label="Year-end balance"     value={ending[11]} />
+      </div>
+
+      <div className="sheet-toolbar">
+        <div className="left">
+          <div className="bucket-legend">
+            {BUCKET_ORDER.map(b => (
+              <div key={b} className="item">
+                <span className={'dot ' + b}></span>
+                {BUCKETS[b].label}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="right">
+          <span>Show:</span>
+          <select className="col-mode" value={colMode} onChange={e => setColMode(e.target.value)}>
+            <option value="all">All 12 months</option>
+            <option value="quarter">One quarter</option>
+            <option value="month">Single month</option>
+          </select>
+          {colMode !== 'all' && (
+            <>
+              <button className="btn ghost" style={{ padding: '4px 10px' }}
+                onClick={() => setFocusMonth((focusMonth + 11) % 12)}>‹</button>
+              <span style={{ minWidth: 90, textAlign: 'center', color: 'var(--ink)' }}>
+                {colMode === 'quarter' ? 'Q' + (Math.floor(focusMonth / 3) + 1) : MONTHS_LONG[focusMonth]}
+              </span>
+              <button className="btn ghost" style={{ padding: '4px 10px' }}
+                onClick={() => setFocusMonth((focusMonth + 1) % 12)}>›</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="sheet-wrap">
+        <div className="sheet-scroll">
+          <Sheet
+            visibleMonths={visibleMonths} data={data}
+            incomeMonthly={incomeMonthly} incomeAnnual={incomeAnnual}
+            groupTotals={groupTotals}
+            disbursementsMonthly={disbursementsMonthly} disbursementsAnnual={disbursementsAnnual}
+            netMonthly={netMonthly} netAnnual={netAnnual}
+            beginning={beginning} ending={ending}
+            setIncomeCell={setIncomeCell} setCatCell={setCatCell}
+            setIncomeName={setIncomeName} setCatName={setCatName} setGroupName={setGroupName}
+            cycleBucket={cycleBucket}
+            addIncome={addIncome} addCat={addCat} addGroup={addGroup}
+            delIncome={delIncome} delCat={delCat} delGroup={delGroup}
+            setBeginning={setBeginning}
+          />
+        </div>
+      </div>
+
+      <AllocationSummary
+        bucketAnnual={bucketAnnual} bucketMonthlyAvg={bucketMonthlyAvg}
+        incomeAnnual={incomeAnnual} incomeMonthlyAvg={incomeAnnual / 12}
+        groupTotals={groupTotals} groups={data.groups}
+      />
+
+      <div className="foot-note">
+        <span>Click a colored dot to cycle a category between needs / wants / saving / giving.</span>
+        <span>Changes saved automatically.</span>
+      </div>
+    </div>
+  );
+}
+
+function Sheet(props) {
+  const {
+    visibleMonths, data,
+    incomeMonthly, incomeAnnual, groupTotals,
+    disbursementsMonthly, disbursementsAnnual,
+    netMonthly, netAnnual, beginning, ending,
+    setIncomeCell, setCatCell, setIncomeName, setCatName, setGroupName,
+    cycleBucket, addIncome, addCat, addGroup, delIncome, delCat, delGroup, setBeginning,
+  } = props;
+
+  const n  = visibleMonths.length;
+  const ct = `28px 224px repeat(${n}, minmax(70px, 1fr)) 92px 28px`;
+  const rs = { gridTemplateColumns: ct };
+
+  return (
+    <div>
+      <div className="row head" style={rs}>
+        <div></div>
+        <div>Category</div>
+        {visibleMonths.map(m => <div key={m} className="month">{MONTHS[m]}</div>)}
+        <div className="annual">Annual</div>
+        <div></div>
+      </div>
+
+      <div className="row balance begin" style={rs}>
+        <div></div>
+        <div className="name">Beginning balance</div>
+        {visibleMonths.map(m => (
+          <div key={m} className="num month">
+            {m === 0
+              ? <NumberInput value={data.beginningBalance} onChange={setBeginning} />
+              : <span className={beginning[m] < 0 ? 'neg' : ''}>{fmt(beginning[m])}</span>
+            }
+          </div>
+        ))}
+        <div className="num annual">—</div>
+        <div></div>
+      </div>
+
+      <div className="row section" style={rs}>
+        <div></div><div>Receipts</div>
+        {visibleMonths.map(m => <div key={m}></div>)}
+        <div></div><div></div>
+      </div>
+
+      {data.income.map(row => (
+        <div key={row.id} className="row income" style={rs}>
+          <div><span className="bucket-dot inc"></span></div>
+          <div className="name">
+            <input value={row.name} placeholder="Income source"
+              onChange={e => setIncomeName(row.id, e.target.value)} />
+          </div>
+          {visibleMonths.map(m => (
+            <div key={m} className="num month">
+              <NumberInput value={row.monthly[m]} onChange={v => setIncomeCell(row.id, m, v)} />
+            </div>
+          ))}
+          <div className="num annual">{fmt(sum(row.monthly))}</div>
+          <button className="row-del" onClick={() => delIncome(row.id)}>×</button>
+        </div>
+      ))}
+
+      <button className="add-row" onClick={addIncome}>
+        <span className="plus">+</span><span className="lbl">Add income source</span>
+      </button>
+
+      <div className="row total" style={rs}>
+        <div></div>
+        <div className="name">Total receipts</div>
+        {visibleMonths.map(m => <div key={m} className="num month">{fmt(incomeMonthly[m])}</div>)}
+        <div className="num annual">{fmt(incomeAnnual)}</div>
+        <div></div>
+      </div>
+
+      <div className="row section" style={rs}>
+        <div></div><div>Disbursements</div>
+        {visibleMonths.map(m => <div key={m}></div>)}
+        <div></div><div></div>
+      </div>
+
+      {data.groups.map((g, gi) => {
+        const gt = groupTotals[gi];
+        return (
+          <React.Fragment key={g.id}>
+            <div className="row group" style={rs}>
+              <div></div>
+              <div className="name">
+                <input value={g.name} placeholder="Group name"
+                  onChange={e => setGroupName(g.id, e.target.value)}
+                  style={{ fontWeight: 500 }} />
+              </div>
+              {visibleMonths.map(m => (
+                <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero: '·' })}</div>
+              ))}
+              <div className="num annual">{fmt(gt.annual)}</div>
+              <button className="row-del" onClick={() => delGroup(g.id)}>×</button>
+            </div>
+
+            {g.cats.map(c => (
+              <div key={c.id} className="row cat" style={rs}>
+                <div>
+                  <span className={'bucket-dot ' + c.bucket}
+                    title={'Bucket: ' + BUCKETS[c.bucket].label + ' — click to change'}
+                    onClick={() => cycleBucket(g.id, c.id)}></span>
+                </div>
+                <div className="name">
+                  <input value={c.name} placeholder="Category"
+                    onChange={e => setCatName(g.id, c.id, e.target.value)} />
+                </div>
+                {visibleMonths.map(m => (
+                  <div key={m} className="num month">
+                    <NumberInput value={c.monthly[m]}
+                      onChange={v => setCatCell(g.id, c.id, m, v)} dim />
+                  </div>
+                ))}
+                <div className="num annual">{fmt(sum(c.monthly))}</div>
+                <button className="row-del" onClick={() => delCat(g.id, c.id)}>×</button>
+              </div>
+            ))}
+
+            <button className="add-row" onClick={() => addCat(g.id)}>
+              <span className="plus">+</span>
+              <span className="lbl">Add to {g.name.toLowerCase() || 'group'}</span>
+            </button>
+          </React.Fragment>
+        );
+      })}
+
+      <button className="add-row" onClick={addGroup}
+        style={{ borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line-soft)' }}>
+        <span className="plus">+</span><span className="lbl">Add group</span>
+      </button>
+
+      <div className="row total" style={rs}>
+        <div></div>
+        <div className="name">Total disbursements</div>
+        {visibleMonths.map(m => <div key={m} className="num month">{fmt(disbursementsMonthly[m])}</div>)}
+        <div className="num annual">{fmt(disbursementsAnnual)}</div>
+        <div></div>
+      </div>
+
+      <div className="row net" style={rs}>
+        <div></div>
+        <div className="name">Net income</div>
+        {visibleMonths.map(m => (
+          <div key={m} className={'num month ' + (netMonthly[m] < 0 ? 'neg' : '')}>
+            {fmt(netMonthly[m], { sign: true, zero: '$0' })}
+          </div>
+        ))}
+        <div className={'num annual ' + (netAnnual < 0 ? 'neg' : '')}>
+          {fmt(netAnnual, { sign: true, zero: '$0' })}
+        </div>
+        <div></div>
+      </div>
+
+      <div className={'row balance ' + (ending.some(e => e < 0) ? 'neg' : '')} style={rs}>
+        <div></div>
+        <div className="name">Ending balance</div>
+        {visibleMonths.map(m => (
+          <div key={m} className={'num month ' + (ending[m] < 0 ? 'neg' : '')}>{fmt(ending[m])}</div>
+        ))}
+        <div className="num annual">{fmt(ending[11])}</div>
+        <div></div>
+      </div>
+    </div>
+  );
+}
+
+function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups }) {
+  const denom      = incomeAnnual || 1;
+  const allocTotal = Object.values(bucketAnnual).reduce((a, b) => a + b, 0);
+  const barDenom   = allocTotal || 1;
+  const seg        = n => Math.max(0, (n / barDenom) * 100);
+  const showUnalloc = bucketAnnual.unalloc > 0;
+
+  const housingGroup = groupTotals.find((gt, i) => groups[i] && groups[i].id === 'g_housing');
+  const housingPct   = housingGroup ? housingGroup.annual / denom : 0;
+  const savingRate   = bucketAnnual.save / denom;
+  const givingRate   = bucketAnnual.give / denom;
+
+  return (
+    <div className="alloc">
+      <div className="alloc-head">
+        <h3>Allocation of every dollar earned</h3>
+        <div className="income">{fmtAccurate(incomeMonthlyAvg)} avg / month · {fmt(incomeAnnual)} / year</div>
+      </div>
+      <div className="alloc-bar">
+        <div className="seg-needs" style={{ width: seg(bucketAnnual.needs) + '%' }}></div>
+        <div className="seg-wants" style={{ width: seg(bucketAnnual.wants) + '%' }}></div>
+        <div className="seg-save"  style={{ width: seg(bucketAnnual.save)  + '%' }}></div>
+        <div className="seg-give"  style={{ width: seg(bucketAnnual.give)  + '%' }}></div>
+        {showUnalloc && <div className="seg-left" style={{ width: seg(bucketAnnual.unalloc) + '%' }}></div>}
+      </div>
+      <div className="alloc-legend">
+        <LegItem dot="needs" label="Needs"  amt={bucketAnnual.needs} p={bucketAnnual.needs/denom} avg={bucketMonthlyAvg.needs} />
+        <LegItem dot="wants" label="Wants"  amt={bucketAnnual.wants} p={bucketAnnual.wants/denom} avg={bucketMonthlyAvg.wants} />
+        <LegItem dot="save"  label="Saving" amt={bucketAnnual.save}  p={bucketAnnual.save /denom} avg={bucketMonthlyAvg.save} />
+        <LegItem dot="give"  label="Giving" amt={bucketAnnual.give}  p={bucketAnnual.give /denom} avg={bucketMonthlyAvg.give} />
+        {showUnalloc && <LegItem dot="left" label="Unallocated" amt={bucketAnnual.unalloc} p={bucketAnnual.unalloc/denom} avg={bucketMonthlyAvg.unalloc} />}
+      </div>
+      <div className="alloc-rules">
+        <Rule label="Housing"      sub="rule of thumb: under 30% of income"
+          val={pct1(housingGroup ? housingGroup.annual : 0, denom)} ok={housingPct <= 0.30} />
+        <Rule label="Savings rate" sub="rule of thumb: 15% or more"
+          val={pct1(bucketAnnual.save, denom)} ok={savingRate >= 0.15} />
+        <Rule label="Giving"       sub="if charitable goal is 10%"
+          val={pct1(bucketAnnual.give, denom)} ok={givingRate >= 0.10} />
+      </div>
+    </div>
+  );
+}
+
+function LegItem({ dot, label, amt, p, avg }) {
+  return (
+    <div className="leg">
+      <div className="row1"><span className={'dot ' + dot}></span>{label}</div>
+      <div className="amt">{fmt(amt, { zero: '$0' })}</div>
+      <div className="pct">{Math.round(p * 100)}% · {fmt(avg, { zero: '$0' })}/mo</div>
+    </div>
+  );
+}
+function Rule({ label, sub, val, ok }) {
+  return (
+    <div className="rule">
+      <div className="lhs"><span>{label}</span><small>{sub}</small></div>
+      <div className={'rhs ' + (ok ? 'ok' : 'warn')}>{val}</div>
+    </div>
+  );
+}
+
+function NumberInput({ value, onChange, dim }) {
+  const [text, setText] = React.useState(value === 0 ? '' : String(value));
+  React.useEffect(() => {
+    setText(value === 0 ? '' : (Math.round(value * 100) / 100).toString());
+  }, [value]);
+  return (
+    <input value={text} placeholder="·" inputMode="decimal"
+      onChange={e => {
+        const t = e.target.value.replace(/[^\d.\-]/g, '');
+        setText(t); onChange(parseFloat(t) || 0);
+      }}
+      style={dim && (!value || value === 0) ? { color: 'var(--muted)', opacity: 0.6 } : undefined}
+    />
+  );
+}
+
+function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
+  let text;
+  if (pctMode)     text = value + '%';
+  else if (integer) text = String(value) + (suffix || '');
+  else             text = fmt(value, { zero: '$0' });
+  return (
+    <div className="kpi">
+      <div className="lbl">{label}</div>
+      <div className="val">{text}</div>
+      {tone && <div className={'delta ' + tone}>{tone === 'pos' ? 'positive cash flow' : 'over budget'}</div>}
+    </div>
+  );
+}
+
+Object.assign(window, { BudgetScreen, AllocationSummary, Kpi, NumberInput });
+  </script>
+
+  <script type="text/babel">
+/* ---- track.jsx ---- */
+function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
+  const [showModal,        setShowModal]        = React.useState(false);
+  const [showTransactions, setShowTransactions] = React.useState(false);
+
+  const monthTxs = data.transactions.filter(t => {
+    const d = new Date(t.date + 'T00:00:00');
+    return d.getFullYear() === data.year && d.getMonth() === monthIdx;
+  });
+
+  const actualByCat = {};
+  monthTxs.forEach(t => { actualByCat[t.categoryId] = (actualByCat[t.categoryId] || 0) + t.amount; });
+
+  const cats = [];
+  data.groups.forEach(g => g.cats.forEach(c => {
+    const budgeted = c.monthly[monthIdx] || 0;
+    const actual   = actualByCat[c.id]   || 0;
+    if (budgeted > 0 || actual > 0) cats.push({ ...c, groupId: g.id, groupName: g.name, budgeted, actual });
+  }));
+
+  const totBud    = sum(cats.map(c => c.budgeted));
+  const totAct    = sum(cats.map(c => c.actual));
+  const incomeBud = sum(data.income.map(r => r.monthly[monthIdx]));
+  const remaining = totBud - totAct;
+
+  const today          = new Date();
+  const isCurrentMonth = today.getFullYear() === data.year && today.getMonth() === monthIdx;
+  const daysInMonth    = new Date(data.year, monthIdx + 1, 0).getDate();
+  const dayOfMonth     = isCurrentMonth ? today.getDate() : daysInMonth;
+  const monthPct       = Math.round((dayOfMonth / daysInMonth) * 100);
+
+  const buckets = { needs:{b:0,a:0}, wants:{b:0,a:0}, save:{b:0,a:0}, give:{b:0,a:0} };
+  cats.forEach(c => { if (buckets[c.bucket]) { buckets[c.bucket].b += c.budgeted; buckets[c.bucket].a += c.actual; } });
+
+  const addTransaction    = tx => setData(d => ({ ...d, transactions: [...d.transactions, { id: uid(), ...tx }] }));
+  const deleteTransaction = id => setData(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id) }));
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1>{MONTHS_LONG[monthIdx]}, <em>so far</em></h1>
+          <div className="sub">
+            {isCurrentMonth
+              ? `Day ${dayOfMonth} of ${daysInMonth} — ${monthPct}% through the month.`
+              : `Viewing ${MONTHS_LONG[monthIdx]} ${data.year}.`
+            }{' '}Log expenses to track actuals against your budget.
+          </div>
+        </div>
+        <div className="actions">
+          <button className="btn ghost" onClick={() => setMonthIdx((monthIdx + 11) % 12)}>‹ {MONTHS_LONG[(monthIdx + 11) % 12]}</button>
+          <button className="btn ghost" onClick={() => setMonthIdx((monthIdx + 1) % 12)}>{MONTHS_LONG[(monthIdx + 1) % 12]} ›</button>
+          <button className="btn ghost" onClick={() => setShowTransactions(v => !v)}>
+            {showTransactions ? 'Card view' : 'Transactions'}
+          </button>
+          <button className="btn primary" onClick={() => setShowModal(true)}>Log expense</button>
+        </div>
+      </div>
+
+      <div className="kpis">
+        <Kpi label="Income budgeted" value={incomeBud} />
+        <Kpi label="Spent so far"    value={totAct} />
+        <Kpi label="Left in budget"  value={remaining} tone={remaining < 0 ? 'neg' : (totAct > 0 ? 'pos' : undefined)} />
+        <Kpi label="Month progress"  value={monthPct} pct />
+      </div>
+
+      {showTransactions ? (
+        <TransactionList transactions={monthTxs} data={data} onDelete={deleteTransaction} onAdd={() => setShowModal(true)} />
+      ) : (
+        <div className="track-grid">
+          <div>
+            {cats.length === 0 ? (
+              <div className="tx-empty">No budget categories set for this month.</div>
+            ) : (
+              BUCKET_ORDER.map(b => {
+                const bcats = cats.filter(c => c.bucket === b);
+                if (!bcats.length) return null;
+                const bs = buckets[b];
+                const bp = bs.b > 0 ? Math.round((bs.a / bs.b) * 100) : 0;
+                return (
+                  <div key={b} style={{ marginTop: 18 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', padding:'4px 4px 8px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--ink-soft)' }}>
+                        <span className={'bucket-dot ' + b} style={{ margin:0 }}></span>
+                        {BUCKETS[b].label}
+                      </div>
+                      <div style={{ fontSize:12.5, color:'var(--muted)', fontFamily:'var(--mono)' }}>
+                        <span style={{ color:'var(--ink)' }}>{fmt(bs.a, { zero:'$0' })}</span> of {fmt(bs.b, { zero:'$0' })} · {bp}%
+                      </div>
+                    </div>
+                    <div className="cat-grid">
+                      {bcats.map(c => <CategoryCard key={c.id} cat={c} dayOfMonth={dayOfMonth} daysInMonth={daysInMonth} />)}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="month-summary">
+            <h3>{MONTHS_LONG[monthIdx]} at a glance</h3>
+            <div className="summary-row">
+              <span className="l">Income (budgeted)</span>
+              <span className="r">{fmt(incomeBud)}</span>
+            </div>
+            {BUCKET_ORDER.map(b => (
+              <div className="summary-row" key={b}>
+                <span className="l">
+                  <span className="dot" style={{ background: BUCKETS[b].color }}></span>
+                  {BUCKETS[b].label}
+                </span>
+                <span className="r">{fmt(buckets[b].a, { zero:'$0' })}<small> of {fmt(buckets[b].b, { zero:'$0' })}</small></span>
+              </div>
+            ))}
+            <div className="summary-row" style={{ borderTop:'1px solid var(--line)', marginTop:4 }}>
+              <span className="l">Net vs budget</span>
+              <span className="r" style={{ color: remaining < 0 ? 'var(--warn)' : 'var(--save)' }}>
+                {fmt(remaining, { sign: true, zero: '$0' })}
+              </span>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <button className="btn" style={{ width:'100%', justifyContent:'center' }} onClick={() => setShowModal(true)}>
+                + Log expense
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="foot-note">
+        <span>{monthTxs.length} transaction{monthTxs.length !== 1 ? 's' : ''} logged this month.</span>
+        <span>All data saved locally in your browser.</span>
+      </div>
+
+      {showModal && (
+        <LogExpenseModal data={data} monthIdx={monthIdx} year={data.year}
+          onSave={addTransaction} onClose={() => setShowModal(false)} />
+      )}
+    </div>
+  );
+}
+
+function TransactionList({ transactions, data, onDelete, onAdd }) {
+  const catMap = {};
+  data.groups.forEach(g => g.cats.forEach(c => { catMap[c.id] = { name: c.name, bucket: c.bucket, group: g.name }; }));
+  const sorted = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
+
+  if (!sorted.length) {
+    return (
+      <div className="tx-empty">
+        No expenses logged this month yet.{' '}
+        <button className="btn primary" style={{ display:'inline-block', marginLeft:10 }} onClick={onAdd}>Log first expense</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sheet-wrap tx-table">
+      <div className="tx-head">
+        <span>Date</span><span>Note</span><span>Category</span>
+        <span style={{ textAlign:'right' }}>Amount</span><span></span>
+      </div>
+      {sorted.map(tx => {
+        const cat = catMap[tx.categoryId];
+        return (
+          <div key={tx.id} className="tx-row">
+            <span style={{ color:'var(--muted)', fontFamily:'var(--mono)', fontSize:12 }}>{tx.date}</span>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color: tx.note ? 'var(--ink)' : 'var(--muted)' }}>{tx.note || '—'}</span>
+            <span style={{ display:'flex', alignItems:'center', gap:8, overflow:'hidden' }}>
+              {cat && <span className={'bucket-dot ' + cat.bucket} style={{ flexShrink:0, margin:0 }}></span>}
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:12.5 }}>
+                {cat ? cat.name : <span style={{ color:'var(--muted)' }}>Unknown</span>}
+                {cat && <span style={{ color:'var(--muted)', fontSize:11, marginLeft:6 }}>{cat.group}</span>}
+              </span>
+            </span>
+            <span style={{ textAlign:'right', fontFamily:'var(--mono)', fontVariantNumeric:'tabular-nums' }}>{fmt(tx.amount, { zero:'$0' })}</span>
+            <button onClick={() => { if (confirm('Delete this transaction?')) onDelete(tx.id); }}
+              style={{ color:'var(--muted)', fontSize:16, lineHeight:1, cursor:'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--warn)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}>×</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LogExpenseModal({ data, monthIdx, year, onSave, onClose }) {
+  const today = new Date();
+  const defaultDate = (today.getFullYear() === year && today.getMonth() === monthIdx)
+    ? today.toISOString().slice(0, 10)
+    : `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+
+  const [date,       setDate]       = React.useState(defaultDate);
+  const [amount,     setAmount]     = React.useState('');
+  const [note,       setNote]       = React.useState('');
+  const [categoryId, setCategoryId] = React.useState('');
+  const [groupId,    setGroupId]    = React.useState('');
+  const [err,        setErr]        = React.useState('');
+
+  React.useEffect(() => {
+    if (data.groups.length > 0 && data.groups[0].cats.length > 0) {
+      setCategoryId(data.groups[0].cats[0].id);
+      setGroupId(data.groups[0].id);
+    }
+  }, []);
+
+  const handleCatChange = e => {
+    const id = e.target.value;
+    setCategoryId(id);
+    for (const g of data.groups) { if (g.cats.find(c => c.id === id)) { setGroupId(g.id); break; } }
+  };
+
+  const handleSave = () => {
+    const amt = parseFloat(amount);
+    if (!amount || isNaN(amt) || amt <= 0) { setErr('Enter a valid amount greater than zero.'); return; }
+    if (!categoryId) { setErr('Select a category.'); return; }
+    if (!date)       { setErr('Select a date.'); return; }
+    onSave({ date, categoryId, groupId, amount: Math.round(amt * 100) / 100, note: note.trim() });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
+        <div className="modal-head">
+          <h2>Log expense</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="form-field">
+          <label>Amount</label>
+          <input type="number" min="0.01" step="0.01" className="form-input"
+            placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+        </div>
+        <div className="form-field">
+          <label>Category</label>
+          <select className="form-input" value={categoryId} onChange={handleCatChange}>
+            {data.groups.map(g => (
+              <optgroup key={g.id} label={g.name}>
+                {g.cats.map(c => <option key={c.id} value={c.id}>{c.name || '(unnamed)'}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Note <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
+          <input type="text" className="form-input" placeholder="e.g. Whole Foods run"
+            value={note} onChange={e => setNote(e.target.value)} />
+        </div>
+        <div className="form-field">
+          <label>Date</label>
+          <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+        {err && <div className="form-error">{err}</div>}
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={handleSave}>Save expense</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryCard({ cat, dayOfMonth, daysInMonth }) {
+  const p           = cat.budgeted > 0 ? Math.min(100, Math.round((cat.actual / cat.budgeted) * 100)) : (cat.actual > 0 ? 100 : 0);
+  const over        = cat.actual > cat.budgeted && cat.budgeted > 0;
+  const unstarted   = cat.actual === 0;
+  const expectedPct = Math.round((dayOfMonth / daysInMonth) * 100);
+  const remaining   = cat.budgeted - cat.actual;
+  const barColor    = BUCKETS[cat.bucket] ? BUCKETS[cat.bucket].color : 'var(--muted)';
+
+  return (
+    <div className={'cat-card' + (over ? ' over' : '') + (unstarted ? ' unstarted' : '')}>
+      <div className="cat-head">
+        <div className="name-c"><span className="dot" style={{ background: barColor }}></span>{cat.name}</div>
+        <div className="amounts">
+          <span>{fmt(cat.actual, { zero:'$0' })}</span>
+          <span className="of"> / {fmt(cat.budgeted, { zero:'$0' })}</span>
+        </div>
+      </div>
+      <div className="bar">
+        <div style={{ width: p + '%', background: barColor }}></div>
+        {cat.budgeted > 0 && (
+          <div style={{ position:'absolute', left: expectedPct + '%', top:-3, bottom:-3, width:1, background:'var(--ink-soft)', opacity:0.35 }}></div>
+        )}
+      </div>
+      <div className="meta">
+        <span className="left">{unstarted ? 'not started' : over ? `${fmt(-remaining)} over` : `${fmt(remaining)} left`}</span>
+        <span>{p}%</span>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { TrackScreen });
+  </script>
+
+  <script type="text/babel">
+/* ---- plan.jsx ---- */
+function PlanScreen({ data }) {
+  const monthlySaveDefault = React.useMemo(() => {
+    let s = 0;
+    data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save') s += sum(c.monthly); }));
+    return Math.round(s / 12);
+  }, [data.groups]);
+
+  const incomeTotalMonthly = React.useMemo(() => {
+    return Math.round(sum(data.income.map(r => sum(r.monthly))) / 12);
+  }, [data.income]);
+
+  const [monthlySave,  setMonthlySave]  = React.useState(monthlySaveDefault > 0 ? monthlySaveDefault : 800);
+  const [annualReturn, setAnnualReturn] = React.useState(6);
+  const [years,        setYears]        = React.useState(10);
+  const [startBalance, setStartBalance] = React.useState(data.beginningBalance || 18000);
+
+  const months = years * 12;
+  const r      = annualReturn / 100 / 12;
+
+  const series = React.useMemo(() => {
+    const out = []; let bal = startBalance;
+    for (let m = 0; m <= months; m++) { out.push({ m, bal }); bal = bal * (1 + r) + monthlySave; }
+    return out;
+  }, [months, r, startBalance, monthlySave]);
+
+  const finalBal    = series[series.length - 1].bal;
+  const contributed = startBalance + monthlySave * months;
+  const earned      = finalBal - contributed;
+
+  let monthlyNeedsWants = 0;
+  data.groups.forEach(g => g.cats.forEach(c => {
+    if (c.bucket === 'needs' || c.bucket === 'wants') monthlyNeedsWants += sum(c.monthly) / 12;
+  }));
+  if (monthlyNeedsWants === 0) monthlyNeedsWants = 3000;
+
+  const milestones = [
+    { name: 'Emergency fund',         detail: '3 months of essentials',  target: monthlyNeedsWants * 3 },
+    { name: 'House down payment',     detail: '20% on a $450k home',     target: 90000 },
+    { name: 'Sabbatical fund',        detail: '6 months of income',      target: incomeTotalMonthly * 6 },
+    { name: 'Financial independence', detail: '25× annual essentials',   target: monthlyNeedsWants * 12 * 25 },
+  ];
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1>Plan for what's <em>next</em></h1>
+          <div className="sub">See how your saving rate compounds over time. Adjust contribution and return to test how your milestones move in or out of reach.</div>
+        </div>
+        <div className="actions">
+          <button className="btn ghost" onClick={() => { setMonthlySave(monthlySaveDefault > 0 ? monthlySaveDefault : 800); setStartBalance(data.beginningBalance || 0); }}>
+            Reset to budget
+          </button>
+        </div>
+      </div>
+
+      <div className="kpis">
+        <Kpi label="Saving / month"      value={monthlySave} />
+        <Kpi label="Time horizon"        value={years} integer suffix=" yrs" />
+        <Kpi label="Projected balance"   value={Math.round(finalBal)} />
+        <Kpi label="Growth from returns" value={Math.round(earned)} />
+      </div>
+
+      <div className="plan-grid">
+        <div className="chart-card">
+          <h3>Projected balance</h3>
+          <div className="caption">{fmt(monthlySave, { zero:'$0' })}/mo at {annualReturn}% return, starting from {fmt(startBalance, { zero:'$0' })}.</div>
+          <ProjectionChart series={series} years={years} />
+        </div>
+        <div className="plan-controls">
+          <Slider label="Monthly contribution"  value={monthlySave}  min={0}   max={5000}  step={50}  format={v => fmt(v, { zero:'$0' })} onChange={setMonthlySave}  ends={['$0','$5,000']} />
+          <Slider label="Expected annual return" value={annualReturn} min={0}   max={12}    step={0.5} format={v => v + '%'}               onChange={setAnnualReturn} ends={['0%','12%']} />
+          <Slider label="Time horizon"           value={years}        min={1}   max={40}    step={1}   format={v => v + ' years'}          onChange={setYears}        ends={['1 yr','40 yrs']} />
+          <Slider label="Starting balance"       value={startBalance} min={0}   max={100000} step={500} format={v => fmt(v, { zero:'$0' })} onChange={setStartBalance} ends={['$0','$100k']} />
+        </div>
+      </div>
+
+      <div className="milestones">
+        <h3>Milestones at this rate</h3>
+        {milestones.map(m => {
+          const eta = monthsToReach(m.target, startBalance, monthlySave, r);
+          const p   = Math.min(100, Math.round((finalBal / m.target) * 100));
+          return (
+            <div className="milestone-row" key={m.name}>
+              <div className="ms-name"><strong>{m.name}</strong><span>{m.detail} · {fmt(Math.round(m.target))}</span></div>
+              <div className="ms-eta">{eta == null ? '—' : formatEta(eta)}{eta != null && eta > 0 && <span className="unit">to reach</span>}</div>
+              <div className="ms-pct">{p}% by yr {years}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="foot-note">
+        <span>Projections assume steady monthly contributions and returns; values are nominal dollars.</span>
+        <span>Compounded monthly</span>
+      </div>
+    </div>
+  );
+}
+
+function monthsToReach(target, start, monthly, r) {
+  let bal = start;
+  if (bal >= target) return 0;
+  if (monthly <= 0 && r <= 0) return null;
+  for (let m = 1; m <= 12 * 60; m++) { bal = bal * (1 + r) + monthly; if (bal >= target) return m; }
+  return null;
+}
+function formatEta(m) {
+  if (m === 0) return 'now';
+  const y = Math.floor(m / 12), mo = m % 12;
+  if (y === 0) return mo + ' mo';
+  if (mo === 0) return y + ' yr' + (y > 1 ? 's' : '');
+  return y + 'y ' + mo + 'm';
+}
+function niceCeil(n) {
+  if (n <= 0) return 1000;
+  const exp = Math.pow(10, Math.floor(Math.log10(n))), f = n / exp;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exp;
+}
+function abbrev(n) {
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+  if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'k';
+  return '$' + Math.round(n);
+}
+
+function Slider({ label, value, min, max, step, format, onChange, ends }) {
+  return (
+    <div className="control">
+      <div className="lbl">{label}</div>
+      <div className="val">{format(value)}</div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} />
+      <div className="ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>
+    </div>
+  );
+}
+
+function ProjectionChart({ series, years }) {
+  const W=640,H=260,PL=56,PR=12,PT=16,PB=28;
+  const maxBal=Math.max(...series.map(p=>p.bal),1), niceMax=niceCeil(maxBal);
+  const x=m=>PL+(m/(series.length-1))*(W-PL-PR);
+  const y=b=>PT+(1-b/niceMax)*(H-PT-PB);
+  const path=series.map((p,i)=>(i?'L':'M')+x(p.m).toFixed(1)+' '+y(p.bal).toFixed(1)).join(' ');
+  const areaPath=path+` L ${x(series.length-1).toFixed(1)} ${(H-PB).toFixed(1)} L ${x(0).toFixed(1)} ${(H-PB).toFixed(1)} Z`;
+  const tickVals=Array.from({length:5},(_,i)=>(niceMax*i)/4);
+  const xTickCount=Math.min(years,8);
+  const xTicks=Array.from({length:xTickCount+1},(_,i)=>Math.round((years*i)/xTickCount));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:'100%', height:'auto', display:'block' }}>
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor="var(--accent)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {tickVals.map((v,i)=>(
+        <g key={i}>
+          <line x1={PL} x2={W-PR} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth="1" />
+          <text x={PL-8} y={y(v)+4} textAnchor="end" fontSize="11" fill="var(--muted)" fontFamily="var(--mono)">{abbrev(v)}</text>
+        </g>
+      ))}
+      {xTicks.map((yr,i)=>(
+        <text key={i} x={x(yr*12)} y={H-10} textAnchor="middle" fontSize="11" fill="var(--muted)" fontFamily="var(--mono)">
+          {yr===0?'now':'y'+yr}
+        </text>
+      ))}
+      <path d={areaPath} fill="url(#areaGrad)" />
+      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <circle cx={x(series.length-1)} cy={y(series[series.length-1].bal)} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" />
+    </svg>
+  );
+}
+
+Object.assign(window, { PlanScreen });
+  </script>
+
+  <script type="text/babel">
+/* ---- app.jsx ---- */
+function App() {
+  const [screen,   setScreen]   = React.useState('budget');
+  const [monthIdx, setMonthIdx] = React.useState(Math.min(new Date().getMonth(), 11));
+  const [data,     setData]     = React.useState(() => {
+    try {
+      const raw = localStorage.getItem('ledger.data.v2');
+      if (raw) { const p = JSON.parse(raw); if (p && p.groups) return migrateData(p); }
+    } catch (_) {}
+    return { ...STARTER_DATA };
+  });
+
+  React.useEffect(() => {
+    try { localStorage.setItem('ledger.data.v2', JSON.stringify(data)); } catch (_) {}
+  }, [data]);
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ledger-${data.year}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const p = JSON.parse(ev.target.result);
+          if (p && p.groups) setData(migrateData(p));
+          else alert("This doesn't look like a Ledger data file.");
+        } catch (_) { alert('Could not parse the file.'); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const resetData = () => {
+    if (confirm('Reset to starter data? All your budget and transactions will be lost.'))
+      setData({ ...STARTER_DATA, year: new Date().getFullYear() });
+  };
+
+  const initials = (data.name || 'Me').trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || 'ME';
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark"></span>
+          <span className="brand-name">Ledger</span>
+        </div>
+        <nav className="nav">
+          {[['budget','Budget'],['track','Track'],['plan','Plan']].map(([k,label]) => (
+            <button key={k} className={screen === k ? 'active' : ''} onClick={() => setScreen(k)}>{label}</button>
+          ))}
+        </nav>
+        <div className="topbar-right">
+          <div className="year-pill">
+            <button onClick={() => setData(d => ({ ...d, year: d.year - 1 }))} aria-label="Previous year">‹</button>
+            <span>{data.year}</span>
+            <button onClick={() => setData(d => ({ ...d, year: d.year + 1 }))} aria-label="Next year">›</button>
+          </div>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
+          <div className="avatar" title={data.name || 'Me'}>{initials}</div>
+        </div>
+      </header>
+      <main className="main">
+        {screen === 'budget' && <BudgetScreen data={data} setData={setData} />}
+        {screen === 'track'  && <TrackScreen  data={data} setData={setData} monthIdx={monthIdx} setMonthIdx={setMonthIdx} />}
+        {screen === 'plan'   && <PlanScreen   data={data} />}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
