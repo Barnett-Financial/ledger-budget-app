@@ -25,6 +25,41 @@
        when served over HTTP. Babel processes these in order at page load. -->
 
   <script type="text/babel">
+/* ---- CSV import helpers ---- */
+function splitCSVRow(row) {
+  const result = []; let cur = '', inQuote = false;
+  for (let i = 0; i < row.length; i++) {
+    if (row[i] === '"') {
+      if (inQuote && row[i+1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (row[i] === ',' && !inQuote) { result.push(cur); cur = ''; }
+    else cur += row[i];
+  }
+  result.push(cur); return result;
+}
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const headers = splitCSVRow(lines[0]).map(h => h.trim());
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const vals = splitCSVRow(line);
+    return Object.fromEntries(headers.map((h, i) => [h, (vals[i] || '').trim()]));
+  });
+}
+function generateCSVTemplate() {
+  const rows = [
+    ['Type','Group','Name','Bucket','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    ['Income','','Salary','','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600'],
+    ['Income','','Partner income','','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432'],
+    ['Category','Housing','Rent','needs','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923'],
+    ['Category','Housing','Utilities','needs','175','175','175','175','175','175','175','175','175','175','175','175'],
+    ['Category','Food','Groceries','needs','500','500','500','500','500','500','500','500','500','500','500','500'],
+    ['Category','Food','Restaurants','wants','125','125','125','125','125','125','125','125','125','125','125','125'],
+    ['Category','Savings','Emergency fund','save','300','300','300','300','300','300','300','300','300','300','300','300'],
+    ['Category','Giving','Charitable giving','give','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200'],
+  ];
+  return rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\n');
+}
+
 /* ---- budget.jsx ---- */
 function BudgetScreen({ data, setData }) {
   const [colMode,    setColMode]    = React.useState('all');
@@ -142,6 +177,59 @@ function BudgetScreen({ data, setData }) {
 
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
+  const importCSV = () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.csv,.txt';
+    input.onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const rows = parseCSV(ev.target.result);
+          const monthCols = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const income = []; const groupMap = {}; const groupOrder = [];
+          rows.forEach(row => {
+            const type   = (row['Type'] || '').toLowerCase().trim();
+            const group  = (row['Group'] || '').trim() || 'Other';
+            const name   = (row['Name'] || row['Category'] || '').trim();
+            const bucket = (row['Bucket'] || 'needs').toLowerCase().trim();
+            const monthly = monthCols.map(m => parseFloat(row[m] || 0) || 0);
+            if (!name) return;
+            if (type === 'income') {
+              income.push({ id: 'inc_' + uid(), name, monthly });
+            } else if (type === 'category' || type === 'expense' || type === 'cat') {
+              if (!groupMap[group]) { groupMap[group] = { id: 'g_' + uid(), name: group, cats: [] }; groupOrder.push(group); }
+              const validBucket = ['needs','wants','save','give'].includes(bucket) ? bucket : 'needs';
+              groupMap[group].cats.push({ id: 'c_' + uid(), name, bucket: validBucket, monthly });
+            }
+          });
+          const nInc = income.length, nGrp = groupOrder.length;
+          const nCat = groupOrder.reduce((a, g) => a + groupMap[g].cats.length, 0);
+          if (nInc === 0 && nCat === 0) {
+            alert('No budget data found.\n\nMake sure your CSV has a header row with columns:\nType, Group, Name, Bucket, Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec\n\nUse the "CSV template" button to download a sample file.');
+            return;
+          }
+          if (confirm(`Found ${nInc} income source${nInc !== 1 ? 's' : ''} and ${nCat} categor${nCat !== 1 ? 'ies' : 'y'} in ${nGrp} group${nGrp !== 1 ? 's' : ''}.\n\nThis will replace your current budget (transactions and starting balance are kept). Continue?`)) {
+            setData(prev => ({
+              ...prev,
+              income: nInc > 0 ? income : prev.income,
+              groups: nGrp > 0 ? groupOrder.map(g => groupMap[g]) : prev.groups,
+            }));
+          }
+        } catch (_) { alert('Could not parse the CSV. Please check the format and try again.'); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const downloadCSVTemplate = () => {
+    const blob = new Blob([generateCSVTemplate()], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'ledger-budget-template.csv'; a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -152,6 +240,8 @@ function BudgetScreen({ data, setData }) {
           </div>
         </div>
         <div className="actions">
+          <button className="btn ghost" onClick={downloadCSVTemplate} title="Download a sample CSV showing the expected format for import">CSV template</button>
+          <button className="btn ghost" onClick={importCSV} title="Upload a CSV file exported from Google Sheets or Excel">Upload CSV</button>
           <button className="btn ghost" onClick={copyJan}>Fill across from Jan</button>
           <button className="btn primary" onClick={handleSave}>
             {saved ? 'Saved ✓' : 'Save budget'}
@@ -866,7 +956,7 @@ function PlanScreen({ data }) {
           <Slider label="Monthly contribution"  value={monthlySave}  min={0}   max={5000}  step={50}  format={v => fmt(v, { zero:'$0' })} onChange={setMonthlySave}  ends={['$0','$5,000']} />
           <Slider label="Expected annual return" value={annualReturn} min={0}   max={12}    step={0.5} format={v => v + '%'}               onChange={setAnnualReturn} ends={['0%','12%']} />
           <Slider label="Time horizon"           value={years}        min={1}   max={40}    step={1}   format={v => v + ' years'}          onChange={setYears}        ends={['1 yr','40 yrs']} />
-          <Slider label="Starting balance"       value={startBalance} min={0}   max={100000} step={500} format={v => fmt(v, { zero:'$0' })} onChange={setStartBalance} ends={['$0','$100k']} />
+          <Slider label="Starting balance"       value={startBalance} min={0}   max={1000000} step={1000} format={v => fmt(v, { zero:'$0' })} onChange={setStartBalance} ends={['$0','$1M']} />
         </div>
       </div>
 
