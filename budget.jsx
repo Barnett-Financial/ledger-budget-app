@@ -13,7 +13,7 @@ function splitCSVRow(row) {
   result.push(cur); return result;
 }
 function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
+  const lines = text.trim().split(/\r?\n/).filter(l => !l.trim().startsWith('#'));
   const headers = splitCSVRow(lines[0]).map(h => h.trim());
   return lines.slice(1).filter(l => l.trim()).map(line => {
     const vals = splitCSVRow(line);
@@ -21,18 +21,26 @@ function parseCSV(text) {
   });
 }
 function generateCSVTemplate() {
+  const notes = [
+    '# Ledger Budget Import Template',
+    '# IMPORTANT: Format all amount cells as "General" (not Number/Currency) before saving.',
+    '#   Number-formatted cells may add commas (e.g. 1,923) which will break the import.',
+    '# Type column accepts: Income or Disbursement',
+    '# Bucket column accepts: needs, wants, save, give',
+    '#',
+  ];
   const rows = [
     ['Type','Group','Name','Bucket','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
     ['Income','','Salary','','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600','4600'],
     ['Income','','Partner income','','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432','3432'],
-    ['Category','Housing','Rent','needs','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923'],
-    ['Category','Housing','Utilities','needs','175','175','175','175','175','175','175','175','175','175','175','175'],
-    ['Category','Food','Groceries','needs','500','500','500','500','500','500','500','500','500','500','500','500'],
-    ['Category','Food','Restaurants','wants','125','125','125','125','125','125','125','125','125','125','125','125'],
-    ['Category','Savings','Emergency fund','save','300','300','300','300','300','300','300','300','300','300','300','300'],
-    ['Category','Giving','Charitable giving','give','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200'],
+    ['Disbursement','Housing','Rent','needs','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923','1923'],
+    ['Disbursement','Housing','Utilities','needs','175','175','175','175','175','175','175','175','175','175','175','175'],
+    ['Disbursement','Food','Groceries','needs','500','500','500','500','500','500','500','500','500','500','500','500'],
+    ['Disbursement','Food','Restaurants','wants','125','125','125','125','125','125','125','125','125','125','125','125'],
+    ['Disbursement','Savings','Emergency fund','save','300','300','300','300','300','300','300','300','300','300','300','300'],
+    ['Disbursement','Giving','Charitable giving','give','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200'],
   ];
-  return rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\n');
+  return notes.join('\n') + '\n' + rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\n');
 }
 
 function BudgetScreen({ data, setData }) {
@@ -182,7 +190,7 @@ function BudgetScreen({ data, setData }) {
             if (!name) return;
             if (type === 'income') {
               income.push({ id: 'inc_' + uid(), name, monthly });
-            } else if (type === 'category' || type === 'expense' || type === 'cat') {
+            } else if (type === 'disbursement' || type === 'category' || type === 'expense' || type === 'cat') {
               if (!groupMap[group]) { groupMap[group] = { id: 'g_' + uid(), name: group, cats: [] }; groupOrder.push(group); }
               const validBucket = ['needs','wants','save','give'].includes(bucket) ? bucket : 'needs';
               groupMap[group].cats.push({ id: 'c_' + uid(), name, bucket: validBucket, monthly });
@@ -237,7 +245,7 @@ function BudgetScreen({ data, setData }) {
       <div className="kpis">
         <Kpi label="Annual income"       value={incomeAnnual} />
         <Kpi label="Annual outflow"      value={disbursementsAnnual} />
-        <Kpi label="Net to balance sheet" value={netAnnual} tone={netAnnual < 0 ? 'neg' : 'pos'} />
+        <Kpi label="Net to balance sheet" value={netAnnual + bucketAnnual.save} tone={(netAnnual + bucketAnnual.save) < 0 ? 'neg' : 'pos'} />
         <Kpi label="Year-end balance"    value={ending[11]} />
       </div>
 
@@ -528,7 +536,7 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
   const seg      = n => Math.max(0, (n / barDenom) * 100);
   const showUnalloc = bucketAnnual.unalloc > 0;
 
-  const housingGroup = groupTotals.find((gt, i) => groups[i] && groups[i].id === 'g_housing');
+  const housingGroup = groupTotals.find((gt, i) => groups[i] && groups[i].name.toLowerCase() === 'housing');
   const housingPct   = housingGroup ? housingGroup.annual / denom : 0;
   const savingRate   = bucketAnnual.save / denom;
   const givingRate   = bucketAnnual.give / denom;
@@ -616,22 +624,4 @@ function NumberInput({ value, onChange, dim }) {
   );
 }
 
-function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
-  let text;
-  if (pctMode)   text = value + '%';
-  else if (integer) text = String(value) + (suffix || '');
-  else           text = fmt(value, { zero: '$0' });
-  return (
-    <div className="kpi">
-      <div className="lbl">{label}</div>
-      <div className="val">{text}</div>
-      {tone && (
-        <div className={'delta ' + tone}>
-          {tone === 'pos' ? 'positive cash flow' : 'over budget'}
-        </div>
-      )}
-    </div>
-  );
-}
-
-Object.assign(window, { BudgetScreen, AllocationSummary, Kpi, NumberInput });
+function Kpi({ label, value, tone, integer, suffix, pct:

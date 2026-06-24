@@ -63,7 +63,7 @@ function PlanScreen({ data }) {
           </div>
         </div>
         <div className="actions">
-          <button className="btn ghost"
+          <button className="btn"
             onClick={() => {
               setMonthlySave(monthlySaveDefault > 0 ? monthlySaveDefault : 800);
               setStartBalance(data.beginningBalance || 0);
@@ -243,3 +243,4 @@ function ProjectionChart({ series, years }) {
 }
 
 Object.assign(window, { PlanScreen });
+      
