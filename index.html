@@ -18,11 +18,7 @@
 <body>
   <div id="root"></div>
 
-  <!-- data.js is plain JS — loads fine over file:// -->
   <script src="data.js"></script>
-
-  <!-- JSX inlined so the app works when opened directly (file://) as well as
-       when served over HTTP. Babel processes these in order at page load. -->
 
   <script type="text/babel">
 /* ---- CSV import helpers ---- */
@@ -67,10 +63,10 @@ function generateCSVTemplate() {
     ['Disbursement','Savings','Retirement (401k)','save','500','500','500','500','500','500','500','500','500','500','500','500'],
     ['Disbursement','Giving','Charitable giving','give','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200'],
   ];
-  return notes.join('\n') + '\n' + rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\n');
+  return notes.join('\n') + '\n' + rows.map(r => r.map(v => v.includes(',') ? '"' + v + '"' : v).join(',')).join('\n');
 }
 
-/* ---- budget.jsx ---- */
+/* ---- BudgetScreen ---- */
 function BudgetScreen({ data, setData }) {
   const [colMode,          setColMode]          = React.useState('all');
   const [focusMonth,       setFocusMonth]       = React.useState(new Date().getMonth());
@@ -87,11 +83,9 @@ function BudgetScreen({ data, setData }) {
 
   const disbursementsMonthly = MONTHS.map((_, m) => sum(groupTotals.map(g => g.monthly[m])));
   const disbursementsAnnual  = sum(disbursementsMonthly);
-
   const netMonthly = MONTHS.map((_, m) => incomeMonthly[m] - disbursementsMonthly[m]);
   const netAnnual  = sum(netMonthly);
 
-  /* Classify save-bucket categories: LT if name has "Retirement"/"Long-term", else Cash */
   const cashSavingsMonthly = MONTHS.map((_, m) => {
     let s = 0;
     data.groups.forEach(g => g.cats.forEach(c => {
@@ -107,7 +101,6 @@ function BudgetScreen({ data, setData }) {
     return s;
   });
 
-  /* Rolling balances with monthly compounding at Plan tab rates */
   const cashRate = (data.planCashYield || 0) / 100 / 12;
   const ltRate   = (data.planLtYield   || 0) / 100 / 12;
   const beginCash = [], endCash = [], beginLT = [], endLT = [];
@@ -135,27 +128,29 @@ function BudgetScreen({ data, setData }) {
     return [focusMonth];
   }, [colMode, focusMonth]);
 
-  const setIncomeCell        = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
-  const setCatCell           = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
-  const setIncomeName        = (id, name) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r) }));
-  const setCatName           = (gid, cid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name }) }) }));
-  const setGroupName         = (gid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name }) }));
-  const cycleBucket          = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length] }) }) }));
-  const addIncome            = () => setData(prev => ({ ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }] }));
-  const addCat               = (gid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }] }) }));
-  const addGroup             = () => setData(prev => ({ ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }] }));
-  const delIncome            = (id) => setData(prev => ({ ...prev, income: prev.income.filter(r => r.id !== id) }));
-  const delCat               = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.filter(c => c.id !== cid) }) }));
-  const delGroup             = (gid) => {
+  const setIncomeCell  = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
+  const setCatCell     = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
+  const setIncomeName  = (id, name) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r) }));
+  const setCatName     = (gid, cid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name }) }) }));
+  const setGroupName   = (gid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name }) }));
+  const cycleBucket    = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length] }) }) }));
+  const addIncome      = () => setData(prev => ({ ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }] }));
+  const addCat         = (gid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }] }) }));
+  const addGroup       = () => setData(prev => ({ ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }] }));
+  const delIncome      = (id) => setData(prev => ({ ...prev, income: prev.income.filter(r => r.id !== id) }));
+  const delCat         = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.filter(c => c.id !== cid) }) }));
+  const delGroup       = (gid) => {
     const g = data.groups.find(gr => gr.id === gid); if (!g) return;
-    const msg = g.cats.length > 0 ? `Delete "${g.name}" and its ${g.cats.length} categor${g.cats.length === 1 ? 'y' : 'ies'}? This cannot be undone.` : `Delete the "${g.name}" group?`;
+    const msg = g.cats.length > 0
+      ? 'Delete "' + g.name + '" and its ' + g.cats.length + ' categor' + (g.cats.length === 1 ? 'y' : 'ies') + '? This cannot be undone.'
+      : 'Delete the "' + g.name + '" group?';
     if (!confirm(msg)) return;
     setData(prev => ({ ...prev, groups: prev.groups.filter(gr => gr.id !== gid) }));
   };
   const setBeginningCash     = (v) => setData(prev => ({ ...prev, beginningCash:     v }));
   const setBeginningLongTerm = (v) => setData(prev => ({ ...prev, beginningLongTerm: v }));
-  const copyJan              = () => setData(prev => ({ ...prev, income: prev.income.map(r => ({ ...r, monthly: arr12(r.monthly[0]) })), groups: prev.groups.map(g => ({ ...g, cats: g.cats.map(c => ({ ...c, monthly: arr12(c.monthly[0]) })) })) }));
-  const handleSave           = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const copyJan  = () => setData(prev => ({ ...prev, income: prev.income.map(r => ({ ...r, monthly: arr12(r.monthly[0]) })), groups: prev.groups.map(g => ({ ...g, cats: g.cats.map(c => ({ ...c, monthly: arr12(c.monthly[0]) })) })) }));
+  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
   const importCSV = () => {
     const input = document.createElement('input');
@@ -177,7 +172,7 @@ function BudgetScreen({ data, setData }) {
             if (!name) return;
             if (type === 'income') {
               income.push({ id: 'inc_' + uid(), name, monthly });
-            } else if (type === 'disbursement' || type === 'category' || type === 'expense' || type === 'cat') {
+            } else {
               if (!groupMap[group]) { groupMap[group] = { id: 'g_' + uid(), name: group, cats: [] }; groupOrder.push(group); }
               const validBucket = ['needs','wants','save','give'].includes(bucket) ? bucket : 'needs';
               groupMap[group].cats.push({ id: 'c_' + uid(), name, bucket: validBucket, monthly });
@@ -185,11 +180,11 @@ function BudgetScreen({ data, setData }) {
           });
           const nInc = income.length, nGrp = groupOrder.length;
           const nCat = groupOrder.reduce((a, g) => a + groupMap[g].cats.length, 0);
-          if (nInc === 0 && nCat === 0) { alert('No budget data found.\n\nMake sure your CSV has a header row with columns:\nType, Group, Name, Bucket, Jan … Dec\n\nUse the "CSV template" button to download a sample file.'); return; }
-          if (confirm(`Found ${nInc} income source${nInc !== 1 ? 's' : ''} and ${nCat} categor${nCat !== 1 ? 'ies' : 'y'} in ${nGrp} group${nGrp !== 1 ? 's' : ''}.\n\nThis will replace your current budget. Continue?`)) {
+          if (nInc === 0 && nCat === 0) { alert('No budget data found. Check the CSV format.'); return; }
+          if (confirm('Found ' + nInc + ' income source' + (nInc !== 1 ? 's' : '') + ' and ' + nCat + ' categor' + (nCat !== 1 ? 'ies' : 'y') + '. Replace current budget?')) {
             setData(prev => ({ ...prev, income: nInc > 0 ? income : prev.income, groups: nGrp > 0 ? groupOrder.map(g => groupMap[g]) : prev.groups }));
           }
-        } catch (_) { alert('Could not parse the CSV. Please check the format and try again.'); }
+        } catch (_) { alert('Could not parse the CSV.'); }
       };
       reader.readAsText(file);
     };
@@ -217,7 +212,6 @@ function BudgetScreen({ data, setData }) {
         </div>
       </div>
 
-      {/* Instructions collapsible */}
       <div style={{ marginBottom:20, border:'1px solid var(--line)', borderRadius:'var(--r-md)', background:'var(--surface)', overflow:'hidden' }}>
         <button style={{ width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'11px 18px', fontWeight:500, fontSize:13.5, textAlign:'left' }}
           onClick={() => setShowInstructions(v => !v)}>
@@ -227,10 +221,10 @@ function BudgetScreen({ data, setData }) {
         {showInstructions && (
           <div style={{ padding:'4px 24px 18px', borderTop:'1px solid var(--line-soft)', fontSize:13.5, lineHeight:1.65, color:'var(--ink-soft)' }}>
             <ul style={{ margin:'10px 0 0', padding:'0 0 0 20px', display:'flex', flexDirection:'column', gap:10 }}>
-              <li><strong>Bucket assignment:</strong> Click a colored dot (●) next to any category to cycle its bucket — Needs, Wants, Saving, or Giving.</li>
-              <li><strong>Cash savings:</strong> Net monthly income is automatically tracked. Alternatively, include a disbursement category with <em>"Savings"</em> or <em>"Cash Savings"</em> in the name. These feed the <strong>Beginning Cash</strong> balance and compound monthly at the Cash Yield set in the Plan tab.</li>
-              <li><strong>Long-term investments:</strong> Include a savings-bucket category with <em>"Retirement"</em> or <em>"Long-term"</em> in the name (e.g., "Retirement (401k)", "Long-term Investment"). These feed the <strong>Beginning Long-term Invest</strong> balance and compound monthly at the Long-term Yield set in the Plan tab.</li>
-              <li><strong>Beginning balances</strong> are editable in January (month 1). Subsequent months are computed automatically, compounding each month at the rates from the Plan tab.</li>
+              <li><strong>Bucket assignment:</strong> Click a colored dot next to any category to cycle its bucket: Needs, Wants, Saving, or Giving.</li>
+              <li><strong>Cash savings:</strong> Categories with <em>Savings</em> or <em>Cash Savings</em> in the name feed the <strong>Beginning Cash</strong> balance, compounding monthly at the Cash Yield set in the Plan tab.</li>
+              <li><strong>Long-term investments:</strong> Categories with <em>Retirement</em> or <em>Long-term</em> in the name feed the <strong>Beginning Long-term Invest</strong> balance, compounding at the Long-term Yield from the Plan tab.</li>
+              <li><strong>Beginning balances</strong> are editable in January only. Subsequent months are auto-computed.</li>
             </ul>
           </div>
         )}
@@ -316,19 +310,17 @@ function Sheet(props) {
   } = props;
 
   const n  = visibleMonths.length;
-  const ct = `28px 224px repeat(${n}, minmax(70px, 1fr)) 92px 28px`;
+  const ct = '28px 224px repeat(' + n + ', minmax(70px, 1fr)) 92px 28px';
   const rs = { gridTemplateColumns: ct };
 
   return (
     <div>
-      {/* Header */}
       <div className="row head" style={rs}>
         <div></div><div>Category</div>
         {visibleMonths.map(m => <div key={m} className="month">{MONTHS[m]}</div>)}
         <div className="annual">Annual</div><div></div>
       </div>
 
-      {/* Beginning Cash Savings */}
       <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
@@ -340,10 +332,9 @@ function Sheet(props) {
             {m === 0 ? <NumberInput value={data.beginningCash} onChange={setBeginningCash} /> : <span>{fmt(beginCash[m])}</span>}
           </div>
         ))}
-        <div className="num annual">—</div><div></div>
+        <div className="num annual">&#8212;</div><div></div>
       </div>
 
-      {/* Beginning Long-term Invest */}
       <div className="row balance begin" style={{ ...rs, borderBottom:'1px solid var(--line)' }}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
@@ -355,10 +346,9 @@ function Sheet(props) {
             {m === 0 ? <NumberInput value={data.beginningLongTerm} onChange={setBeginningLongTerm} /> : <span>{fmt(beginLT[m])}</span>}
           </div>
         ))}
-        <div className="num annual">—</div><div></div>
+        <div className="num annual">&#8212;</div><div></div>
       </div>
 
-      {/* Receipts */}
       <div className="row section" style={rs}>
         <div></div><div>Receipts</div>
         {visibleMonths.map(m => <div key={m}></div>)}
@@ -373,7 +363,7 @@ function Sheet(props) {
             <div key={m} className="num month"><NumberInput value={row.monthly[m]} onChange={v => setIncomeCell(row.id, m, v)} /></div>
           ))}
           <div className="num annual">{fmt(sum(row.monthly))}</div>
-          <button className="row-del" onClick={() => delIncome(row.id)}>×</button>
+          <button className="row-del" onClick={() => delIncome(row.id)}>&#215;</button>
         </div>
       ))}
 
@@ -385,7 +375,6 @@ function Sheet(props) {
         <div className="num annual">{fmt(incomeAnnual)}</div><div></div>
       </div>
 
-      {/* Disbursements */}
       <div className="row section" style={rs}>
         <div></div><div>Disbursements</div>
         {visibleMonths.map(m => <div key={m}></div>)}
@@ -399,9 +388,9 @@ function Sheet(props) {
             <div className="row group" style={rs}>
               <div></div>
               <div className="name"><input value={g.name} placeholder="Group name" onChange={e => setGroupName(g.id, e.target.value)} style={{ fontWeight:500 }} /></div>
-              {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'·' })}</div>)}
+              {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'\xB7' })}</div>)}
               <div className="num annual">{fmt(gt.annual)}</div>
-              <button className="row-del" onClick={() => delGroup(g.id)}>×</button>
+              <button className="row-del" onClick={() => delGroup(g.id)}>&#215;</button>
             </div>
 
             {g.cats.map(c => (
@@ -416,7 +405,7 @@ function Sheet(props) {
                   <div key={m} className="num month"><NumberInput value={c.monthly[m]} onChange={v => setCatCell(g.id, c.id, m, v)} dim /></div>
                 ))}
                 <div className="num annual">{fmt(sum(c.monthly))}</div>
-                <button className="row-del" onClick={() => delCat(g.id, c.id)}>×</button>
+                <button className="row-del" onClick={() => delCat(g.id, c.id)}>&#215;</button>
               </div>
             ))}
 
@@ -448,7 +437,6 @@ function Sheet(props) {
         <div></div>
       </div>
 
-      {/* Total savings wealth */}
       <div className="row balance" style={rs}>
         <div></div>
         <div className="name" style={{ fontStyle:'italic', color:'var(--accent)' }}>Total savings (Cash + LT)</div>
@@ -476,7 +464,7 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
     <div className="alloc">
       <div className="alloc-head">
         <h3>Allocation of every dollar earned</h3>
-        <div className="income">{fmtAccurate(incomeMonthlyAvg)} avg / month · {fmt(incomeAnnual)} / year</div>
+        <div className="income">{fmtAccurate(incomeMonthlyAvg)} avg / month &middot; {fmt(incomeAnnual)} / year</div>
       </div>
       <div className="alloc-bar">
         <div className="seg-needs" style={{ width: seg(bucketAnnual.needs) + '%' }}></div>
@@ -506,7 +494,7 @@ function LegItem({ dot, label, amt, p, avg }) {
     <div className="leg">
       <div className="row1"><span className={'dot ' + dot}></span>{label}</div>
       <div className="amt">{fmt(amt, { zero:'$0' })}</div>
-      <div className="pct">{Math.round(p * 100)}% · {fmt(avg, { zero:'$0' })}/mo</div>
+      <div className="pct">{Math.round(p * 100)}% &middot; {fmt(avg, { zero:'$0' })}/mo</div>
     </div>
   );
 }
@@ -522,7 +510,7 @@ function NumberInput({ value, onChange, dim }) {
   const [text, setText] = React.useState(value === 0 ? '' : String(value));
   React.useEffect(() => { setText(value === 0 ? '' : (Math.round(value * 100) / 100).toString()); }, [value]);
   return (
-    <input value={text} placeholder="·" inputMode="decimal"
+    <input value={text} placeholder="\xB7" inputMode="decimal"
       onChange={e => { const t = e.target.value.replace(/[^\d.\-]/g, ''); setText(t); onChange(parseFloat(t) || 0); }}
       style={dim && (!value || value === 0) ? { color:'var(--muted)', opacity:0.6 } : undefined}
     />
@@ -544,7 +532,7 @@ function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
   </script>
 
   <script type="text/babel">
-/* ---- track.jsx ---- */
+/* ---- TrackScreen ---- */
 function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
   const [showModal,        setShowModal]        = React.useState(false);
   const [showTransactions, setShowTransactions] = React.useState(false);
@@ -565,12 +553,12 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
     if (budgeted > 0 || actual > 0) cats.push({ ...c, groupId:g.id, groupName:g.name, budgeted, actual });
   }));
 
-  const totBud    = sum(cats.map(c => c.budgeted));
-  const totAct    = sum(cats.map(c => c.actual));
+  const totBud = sum(cats.map(c => c.budgeted));
+  const totAct = sum(cats.map(c => c.actual));
   const incomeBud = sum(data.income.map(r => r.monthly[monthIdx]));
   const remaining = totBud - totAct;
 
-  const today          = new Date();
+  const today = new Date();
   const isCurrentMonth = today.getFullYear() === data.year && today.getMonth() === monthIdx;
   const daysInMonth    = new Date(data.year, monthIdx + 1, 0).getDate();
   const dayOfMonth     = isCurrentMonth ? today.getDate() : daysInMonth;
@@ -591,8 +579,10 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
         <div>
           <h1>{MONTHS_LONG[monthIdx]}, <em>so far</em></h1>
           <div className="sub">
-            {isCurrentMonth ? `Day ${dayOfMonth} of ${daysInMonth} — ${monthPct}% through the month.` : `Viewing ${MONTHS_LONG[monthIdx]} ${data.year}.`}
-            {' '}Click any category card or "Log expense" to track spending.
+            {isCurrentMonth
+              ? 'Day ' + dayOfMonth + ' of ' + daysInMonth + ' — ' + monthPct + '% through the month.'
+              : 'Viewing ' + MONTHS_LONG[monthIdx] + ' ' + data.year + '.'}
+            {' '}Click any category card to log an expense for it.
           </div>
         </div>
         <div className="actions">
@@ -616,7 +606,7 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
         <div className="track-grid">
           <div>
             {cats.length === 0 ? (
-              <div className="tx-empty">No budget categories set for this month. Add categories in the Budget tab, then log expenses here.</div>
+              <div className="tx-empty">No budget categories set for this month.</div>
             ) : (
               BUCKET_ORDER.map(b => {
                 const bcats = cats.filter(c => c.bucket === b);
@@ -629,7 +619,7 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
                         <span className={'bucket-dot ' + b} style={{ margin:0 }}></span>{BUCKETS[b].label}
                       </div>
                       <div style={{ fontSize:12.5, color:'var(--muted)', fontFamily:'var(--mono)' }}>
-                        <span style={{ color:'var(--ink)' }}>{fmt(bs.a, { zero:'$0' })}</span> of {fmt(bs.b, { zero:'$0' })} · {bp}%
+                        <span style={{ color:'var(--ink)' }}>{fmt(bs.a, { zero:'$0' })}</span> of {fmt(bs.b, { zero:'$0' })} &middot; {bp}%
                       </div>
                     </div>
                     <div className="cat-grid">
@@ -687,10 +677,7 @@ function TransactionList({ transactions, data, onDelete, onAdd }) {
   }
   return (
     <div className="sheet-wrap tx-table">
-      <div className="tx-head">
-        <span>Date</span><span>Note</span><span>Category</span>
-        <span style={{ textAlign:'right' }}>Amount</span><span></span>
-      </div>
+      <div className="tx-head"><span>Date</span><span>Note</span><span>Category</span><span style={{ textAlign:'right' }}>Amount</span><span></span></div>
       {sorted.map(tx => {
         const cat = catMap[tx.categoryId];
         return (
@@ -708,7 +695,7 @@ function TransactionList({ transactions, data, onDelete, onAdd }) {
             <button onClick={() => { if (confirm('Delete this transaction?')) onDelete(tx.id); }}
               style={{ color:'var(--muted)', fontSize:16, lineHeight:1, cursor:'pointer' }}
               onMouseEnter={e => e.currentTarget.style.color='var(--warn)'}
-              onMouseLeave={e => e.currentTarget.style.color='var(--muted)'}>×</button>
+              onMouseLeave={e => e.currentTarget.style.color='var(--muted)'}>&#215;</button>
           </div>
         );
       })}
@@ -741,7 +728,7 @@ function CategoryCombobox({ data, value, onChange }) {
 
   const renderItems = () => {
     if (query.trim()) {
-      if (!filtered.length) return <div style={{ padding:'10px 12px', color:'var(--muted)', fontSize:13 }}>No categories match "{query}"</div>;
+      if (!filtered.length) return <div style={{ padding:'10px 12px', color:'var(--muted)', fontSize:13 }}>No categories match</div>;
       return filtered.map(c => (
         <div key={c.id} onMouseDown={() => selectCat(c)}
           style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px', cursor:'pointer', background: c.id === value ? 'var(--bg-soft)' : 'transparent', fontSize:13.5 }}
@@ -789,7 +776,7 @@ function LogExpenseModal({ data, monthIdx, year, defaultCategoryId, onSave, onCl
   const today = new Date();
   const defaultDate = (today.getFullYear() === year && today.getMonth() === monthIdx)
     ? today.toISOString().slice(0, 10)
-    : `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+    : year + '-' + String(monthIdx + 1).padStart(2, '0') + '-01';
 
   const [date,       setDate]       = React.useState(defaultDate);
   const [amount,     setAmount]     = React.useState('');
@@ -828,7 +815,7 @@ function LogExpenseModal({ data, monthIdx, year, defaultCategoryId, onSave, onCl
       <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head">
           <h2>Log expense</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose}>&#215;</button>
         </div>
         <div className="form-field">
           <label>Amount</label>
@@ -866,7 +853,7 @@ function CategoryCard({ cat, dayOfMonth, daysInMonth, onClick }) {
   const barColor  = BUCKETS[cat.bucket] ? BUCKETS[cat.bucket].color : 'var(--muted)';
   return (
     <div className={'cat-card' + (over ? ' over' : '') + (unstarted ? ' unstarted' : '')}
-      onClick={onClick} title="Click to log an expense for this category"
+      onClick={onClick}
       style={{ cursor:'pointer', transition:'box-shadow 0.15s' }}
       onMouseEnter={e => { e.currentTarget.style.boxShadow='0 2px 10px rgba(0,0,0,0.09)'; }}
       onMouseLeave={e => { e.currentTarget.style.boxShadow=''; }}>
@@ -879,7 +866,7 @@ function CategoryCard({ cat, dayOfMonth, daysInMonth, onClick }) {
         {cat.budgeted > 0 && <div style={{ position:'absolute', left: expPct + '%', top:-3, bottom:-3, width:1, background:'var(--ink-soft)', opacity:0.35 }}></div>}
       </div>
       <div className="meta">
-        <span className="left">{unstarted ? 'click to log' : over ? `${fmt(-remaining)} over` : `${fmt(remaining)} left`}</span>
+        <span className="left">{unstarted ? 'click to log' : over ? fmt(-remaining) + ' over' : fmt(remaining) + ' left'}</span>
         <span>{p}%</span>
       </div>
     </div>
@@ -888,9 +875,8 @@ function CategoryCard({ cat, dayOfMonth, daysInMonth, onClick }) {
   </script>
 
   <script type="text/babel">
-/* ---- plan.jsx ---- */
+/* ---- PlanScreen ---- */
 function PlanScreen({ data, setData }) {
-
   const cashContribDefault = React.useMemo(() => {
     let s = 0;
     data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save' && !isLtSavings(c.name)) s += sum(c.monthly); }));
@@ -935,7 +921,7 @@ function PlanScreen({ data, setData }) {
   }, [months, cashYield, ltYield, startCash, startLT, cashContrib, ltContrib]);
 
   const last = seriesTotal[seriesTotal.length - 1];
-  const finalBal  = last.bal, finalCash = last.cash, finalLT = last.lt;
+  const finalBal = last.bal, finalCash = last.cash, finalLT = last.lt;
   const contributed = (startCash + startLT) + (cashContrib + ltContrib) * months;
   const earned      = finalBal - contributed;
 
@@ -967,12 +953,12 @@ function PlanScreen({ data, setData }) {
     { name: 'Emergency fund',         detail: '3 months of essentials',  target: monthlyNeedsWants * 3 },
     { name: 'House down payment',     detail: '20% on a $450k home',     target: 90000 },
     { name: 'Sabbatical fund',        detail: '6 months of income',      target: incomeTotalMonthly * 6 },
-    { name: 'Financial independence', detail: '25× annual essentials',   target: monthlyNeedsWants * 12 * 25 },
+    { name: 'Financial independence', detail: '25\xD7 annual essentials', target: monthlyNeedsWants * 12 * 25 },
   ];
 
   const resetToBudget = () => {
-    setStartCash(data.beginningCash     || 0);
-    setStartLT(data.beginningLongTerm   || 0);
+    setStartCash(data.beginningCash  || 0);
+    setStartLT(data.beginningLongTerm || 0);
     setCashContrib(cashContribDefault > 0 ? cashContribDefault : 200);
     setLtContrib(ltContribDefault     > 0 ? ltContribDefault   : 600);
     setCashYield(data.planCashYield || 4);
@@ -981,4 +967,322 @@ function PlanScreen({ data, setData }) {
 
   return (
     <div>
-      <div className="pag
+      <div className="page-head">
+        <div>
+          <h1>Plan for what&#8217;s <em>next</em></h1>
+          <div className="sub">See how your cash and long-term savings compound over time.</div>
+        </div>
+        <div className="actions">
+          <button className="btn" onClick={resetToBudget}>Reset to budget</button>
+        </div>
+      </div>
+
+      <div className="kpis">
+        <Kpi label="Cash / month"        value={cashContrib} />
+        <Kpi label="Long-term / month"   value={ltContrib} />
+        <Kpi label="Projected total"     value={Math.round(finalBal)} />
+        <Kpi label="Growth from returns" value={Math.round(earned)} />
+      </div>
+
+      <div className="plan-grid">
+        <div className="chart-card">
+          <h3>Projected balance</h3>
+          <div className="caption">
+            Cash: {fmt(cashContrib, { zero:'$0' })}/mo @ {cashYield}% &middot; Long-term: {fmt(ltContrib, { zero:'$0' })}/mo @ {ltYield}% &middot; starting from {fmt(Math.round(startCash + startLT), { zero:'$0' })}.
+          </div>
+          <ProjectionChart series={seriesTotal} years={years} />
+          <div style={{ display:'flex', gap:24, marginTop:14, fontSize:12, color:'var(--muted)' }}>
+            <span>Cash at yr {years}: <strong style={{ color:'var(--ink)', fontFamily:'var(--mono)' }}>{fmt(Math.round(finalCash))}</strong></span>
+            <span>Long-term at yr {years}: <strong style={{ color:'var(--ink)', fontFamily:'var(--mono)' }}>{fmt(Math.round(finalLT))}</strong></span>
+          </div>
+        </div>
+
+        <div className="plan-controls">
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'0 2px 2px' }}>Monthly contributions</div>
+          <Slider label="Cash savings / month"          value={cashContrib} min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setCashContrib} ends={['$0','$5,000']} />
+          <Slider label="Long-term investments / month" value={ltContrib}   min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setLtContrib}   ends={['$0','$5,000']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Annual yields</div>
+          <Slider label="Cash yield"                    value={cashYield}   min={0} max={10}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateCashYield} ends={['0%','10%']} />
+          <Slider label="Long-term investment yield"    value={ltYield}     min={0} max={15}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateLtYield}   ends={['0%','15%']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Starting balances</div>
+          <Slider label="Starting cash balance"         value={startCash}   min={0} max={500000} step={500}  format={v => fmt(v, { zero:'$0' })} onChange={setStartCash}    ends={['$0','$500k']} />
+          <Slider label="Starting long-term balance"    value={startLT}     min={0} max={1000000} step={1000} format={v => fmt(v, { zero:'$0' })} onChange={setStartLT}     ends={['$0','$1M']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Time horizon</div>
+          <Slider label="Years to project"              value={years}       min={1} max={40}     step={1}    format={v => v + ' years'}           onChange={setYears}        ends={['1 yr','40 yrs']} />
+        </div>
+      </div>
+
+      <div className="milestones">
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <h3 style={{ fontFamily:'var(--serif)', fontWeight:400, fontSize:22, margin:0, letterSpacing:'-0.01em' }}>Milestones at this rate</h3>
+          <button className="btn" onClick={() => setShowMilestoneModal(true)}>+ Add milestone</button>
+        </div>
+
+        {presetMilestones.map(m => {
+          const eta = monthsToReachTotal(m.target);
+          const p   = Math.min(100, Math.round((finalBal / m.target) * 100));
+          return (
+            <div className="milestone-row" key={m.name}>
+              <div className="ms-name"><strong>{m.name}</strong><span>{m.detail} &middot; {fmt(Math.round(m.target))}</span></div>
+              <div className="ms-eta">{eta == null ? '—' : formatEta(eta)}{eta != null && eta > 0 && <span className="unit">to reach</span>}</div>
+              <div className="ms-pct">{p}% by yr {years}</div>
+            </div>
+          );
+        })}
+
+        {customMilestones.length > 0 && (
+          <div style={{ borderTop:'1px solid var(--line)', marginTop:12, paddingTop:4 }}>
+            <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', margin:'8px 0 4px' }}>Custom milestones</div>
+            {customMilestones.map(m => {
+              const isInvest  = m.accountType === 'invest';
+              const mRate     = (isInvest ? ltYield : cashYield) / 100 / 12;
+              const mContrib  = isInvest ? ltContrib  : cashContrib;
+              const mStartBal = m.startBalance != null ? m.startBalance : (isInvest ? startLT : startCash);
+              const eta       = monthsToReachAccount(m.target, mStartBal, mContrib, mRate);
+              const mFinal    = isInvest ? finalLT : finalCash;
+              const p         = Math.min(100, Math.round((mFinal / m.target) * 100));
+              return (
+                <div className="milestone-row" key={m.id}>
+                  <div className="ms-name">
+                    <strong>{m.name}</strong>
+                    <span>
+                      {m.detail ? m.detail + ' \xB7 ' : ''}{fmt(Math.round(m.target))}
+                      <span style={{ marginLeft:8, color:'var(--muted)', fontSize:11, background:'var(--bg-soft)', padding:'1px 6px', borderRadius:999 }}>{isInvest ? 'invest' : 'cash'}</span>
+                    </span>
+                  </div>
+                  <div className="ms-eta">{eta == null ? '—' : formatEta(eta)}{eta != null && eta > 0 && <span className="unit">to reach</span>}</div>
+                  <div className="ms-pct" style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'flex-end' }}>
+                    <span>{p}% by yr {years}</span>
+                    <button onClick={() => setCustomMilestones(ms => ms.filter(x => x.id !== m.id))}
+                      style={{ color:'var(--muted)', fontSize:15, lineHeight:1, cursor:'pointer', padding:'2px 4px' }}
+                      onMouseEnter={e => { e.currentTarget.style.color='var(--warn)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.color='var(--muted)'; }}>&#215;</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="foot-note">
+        <span>Projections assume steady monthly contributions and returns; values are nominal dollars.</span>
+        <span>Compounded monthly &middot; Cash and long-term accounts tracked separately</span>
+      </div>
+
+      {showMilestoneModal && (
+        <AddMilestoneModal
+          defaultStartCash={startCash} defaultStartLT={startLT}
+          onSave={m => setCustomMilestones(ms => [...ms, m])}
+          onClose={() => setShowMilestoneModal(false)} />
+      )}
+    </div>
+  );
+}
+
+function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }) {
+  const [name,        setName]        = React.useState('');
+  const [detail,      setDetail]      = React.useState('');
+  const [target,      setTarget]      = React.useState('');
+  const [accountType, setAccountType] = React.useState('invest');
+  const [startBal,    setStartBal]    = React.useState('');
+  const [err,         setErr]         = React.useState('');
+
+  const handleSave = () => {
+    if (!name.trim()) { setErr('Enter a milestone name.'); return; }
+    const t = parseFloat(target);
+    if (!target || isNaN(t) || t <= 0) { setErr('Enter a valid goal amount greater than zero.'); return; }
+    onSave({ id: uid(), name: name.trim(), detail: detail.trim(), target: t, accountType, startBalance: startBal !== '' ? parseFloat(startBal) : null });
+    onClose();
+  };
+
+  const ph = accountType === 'invest'
+    ? 'Default: ' + fmt(defaultStartLT, { zero:'$0' }) + ' (LT balance)'
+    : 'Default: ' + fmt(defaultStartCash, { zero:'$0' }) + ' (cash balance)';
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
+        <div className="modal-head"><h2>Add milestone</h2><button className="modal-close" onClick={onClose}>&#215;</button></div>
+        <div className="form-field">
+          <label>Milestone name</label>
+          <input type="text" className="form-input" value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="e.g. Beach house fund" />
+        </div>
+        <div className="form-field">
+          <label>Description <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
+          <input type="text" className="form-input" value={detail} onChange={e => setDetail(e.target.value)} placeholder="Brief description" />
+        </div>
+        <div className="form-field">
+          <label>Goal amount ($)</label>
+          <input type="number" className="form-input" value={target} onChange={e => setTarget(e.target.value)} placeholder="0" min="0" step="100" />
+        </div>
+        <div className="form-field">
+          <label>Account type</label>
+          <select className="form-input" value={accountType} onChange={e => setAccountType(e.target.value)}>
+            <option value="invest">Investment Account (long-term yield + LT contribution)</option>
+            <option value="cash">Cash Account (cash yield + cash contribution)</option>
+          </select>
+        </div>
+        <div className="form-field">
+          <label>Starting balance <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
+          <input type="number" className="form-input" value={startBal} onChange={e => setStartBal(e.target.value)} placeholder={ph} min="0" step="100" />
+        </div>
+        {err && <div className="form-error">{err}</div>}
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={handleSave}>Add milestone</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatEta(m) {
+  if (m === 0) return 'now';
+  const y = Math.floor(m / 12), mo = m % 12;
+  if (y === 0)  return mo + ' mo';
+  if (mo === 0) return y + ' yr' + (y > 1 ? 's' : '');
+  return y + 'y ' + mo + 'm';
+}
+function niceCeil(n) {
+  if (n <= 0) return 1000;
+  const exp = Math.pow(10, Math.floor(Math.log10(n))), f = n / exp;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exp;
+}
+function abbrev(n) {
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+  if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'k';
+  return '$' + Math.round(n);
+}
+
+function Slider({ label, value, min, max, step, format, onChange, ends }) {
+  return (
+    <div className="control">
+      <div className="lbl">{label}</div>
+      <div className="val">{format(value)}</div>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} />
+      <div className="ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>
+    </div>
+  );
+}
+
+function ProjectionChart({ series, years }) {
+  const W=640, H=260, PL=56, PR=12, PT=16, PB=28;
+  const maxBal=Math.max(...series.map(p=>p.bal),1), niceMax=niceCeil(maxBal);
+  const x=m=>PL+(m/(series.length-1))*(W-PL-PR);
+  const y=b=>PT+(1-b/niceMax)*(H-PT-PB);
+  const path=series.map((p,i)=>(i?'L':'M')+x(p.m).toFixed(1)+' '+y(p.bal).toFixed(1)).join(' ');
+  const areaPath=path+' L '+x(series.length-1).toFixed(1)+' '+(H-PB).toFixed(1)+' L '+x(0).toFixed(1)+' '+(H-PB).toFixed(1)+' Z';
+  const tickVals=Array.from({length:5},(_,i)=>(niceMax*i)/4);
+  const xTickCount=Math.min(years,8);
+  const xTicks=Array.from({length:xTickCount+1},(_,i)=>Math.round((years*i)/xTickCount));
+  return (
+    <svg viewBox={'0 0 ' + W + ' ' + H} style={{ width:'100%', height:'auto', display:'block' }}>
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor="var(--accent)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {tickVals.map((v,i)=>(
+        <g key={i}>
+          <line x1={PL} x2={W-PR} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth="1" />
+          <text x={PL-8} y={y(v)+4} textAnchor="end" fontSize="11" fill="var(--muted)" fontFamily="var(--mono)">{abbrev(v)}</text>
+        </g>
+      ))}
+      {xTicks.map((yr,i)=>(
+        <text key={i} x={x(yr*12)} y={H-10} textAnchor="middle" fontSize="11" fill="var(--muted)" fontFamily="var(--mono)">{yr===0?'now':'y'+yr}</text>
+      ))}
+      <path d={areaPath} fill="url(#areaGrad)" />
+      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" />
+      <circle cx={x(series.length-1)} cy={y(series[series.length-1].bal)} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2" />
+    </svg>
+  );
+}
+  </script>
+
+  <script type="text/babel">
+/* ---- App shell ---- */
+function App() {
+  const [screen,   setScreen]   = React.useState('budget');
+  const [monthIdx, setMonthIdx] = React.useState(Math.min(new Date().getMonth(), 11));
+  const [data,     setData]     = React.useState(() => {
+    try {
+      const raw = localStorage.getItem('ledger.data.v2');
+      if (raw) { const p = JSON.parse(raw); if (p && p.groups) return migrateData(p); }
+    } catch (_) {}
+    return { ...STARTER_DATA };
+  });
+
+  React.useEffect(() => {
+    try { localStorage.setItem('ledger.data.v2', JSON.stringify(data)); } catch (_) {}
+  }, [data]);
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'ledger-' + data.year + '.json'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
+  const importData = () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const p = JSON.parse(ev.target.result);
+          if (p && p.groups) setData(migrateData(p));
+          else alert("This doesn't look like a Ledger data file.");
+        } catch (_) { alert('Could not parse the file.'); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const resetData = () => {
+    if (confirm('Reset to starter data? All your budget and transactions will be lost.'))
+      setData({ ...STARTER_DATA, year: new Date().getFullYear() });
+  };
+
+  const initials = (data.name || 'Me').trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || 'ME';
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark"></span>
+          <span className="brand-name">Ledger</span>
+        </div>
+        <nav className="nav">
+          {[['budget','Budget'],['track','Track'],['plan','Plan']].map(([k, label]) => (
+            <button key={k} className={screen === k ? 'active' : ''} onClick={() => setScreen(k)}>{label}</button>
+          ))}
+        </nav>
+        <div className="topbar-right">
+          <div className="year-pill">
+            <button onClick={() => setData(d => ({ ...d, year: d.year - 1 }))} aria-label="Previous year">‹</button>
+            <span>{data.year}</span>
+            <button onClick={() => setData(d => ({ ...d, year: d.year + 1 }))} aria-label="Next year">›</button>
+          </div>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
+          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
+          <div className="avatar" title={data.name || 'Me'}>{initials}</div>
+        </div>
+      </header>
+      <main className="main">
+        {screen === 'budget' && <BudgetScreen data={data} setData={setData} />}
+        {screen === 'track'  && <TrackScreen  data={data} setData={setData} monthIdx={monthIdx} setMonthIdx={setMonthIdx} />}
+        {screen === 'plan'   && <PlanScreen   data={data} setData={setData} />}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
