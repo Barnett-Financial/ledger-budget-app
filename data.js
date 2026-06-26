@@ -12,7 +12,11 @@ const arr12 = (v) => Array.from({ length: 12 }, () => v);
 const STARTER_DATA = {
   year: new Date().getFullYear(),
   name: 'Me',
-  beginningBalance: 10000,
+  beginningCash:     10000,
+  beginningLongTerm: 0,
+  planCashYield:     4,
+  planLtYield:       7,
+  customMilestones:  [],
   income: [
     { id: 'inc1', name: 'Salary',         monthly: arr12(5000) },
     { id: 'inc2', name: 'Partner income', monthly: arr12(5000) },
@@ -53,9 +57,9 @@ const STARTER_DATA = {
       { id: 'vacation', name: 'Vacation / Travel',  bucket: 'wants', monthly: arr12(100)  },
     ]},
     { id: 'g_savings', name: 'Savings', cats: [
-      { id: 'savings',  name: 'Emergency fund',     bucket: 'save',  monthly: arr12(250)  },
-      { id: 'ira',      name: 'Roth IRA',           bucket: 'save',  monthly: arr12(500)  },
-      { id: 'k401',     name: '401(k)',             bucket: 'save',  monthly: arr12(250)  },
+      { id: 'savings',  name: 'Cash Savings',           bucket: 'save', monthly: arr12(250) },
+      { id: 'ira',      name: 'Retirement (Roth IRA)',  bucket: 'save', monthly: arr12(500) },
+      { id: 'k401',     name: 'Retirement (401k)',      bucket: 'save', monthly: arr12(250) },
     ]},
     { id: 'g_giving', name: 'Giving', cats: [
       { id: 'tithe',    name: 'Charitable',         bucket: 'give',  monthly: arr12(200)  },
@@ -76,6 +80,15 @@ const BUCKETS = {
 };
 const BUCKET_ORDER = ['needs','wants','save','give'];
 const BUCKET_CYCLE = ['needs','wants','save','give','unalloc'];
+
+/* ------------------------------------------------------------------ */
+/* Savings classification helpers                                      */
+/* Categories with "Retirement" or "Long-term" in name → LT account. */
+/* All other save-bucket categories → Cash account.                   */
+
+function isLtSavings(name) {
+  return /long.?term|retirement/i.test(name || '');
+}
 
 /* --- Number helpers --- */
 
@@ -106,6 +119,14 @@ function uid() {
 function migrateData(d) {
   if (!d.name)         d.name = 'Me';
   if (!d.transactions) d.transactions = [];
+  /* Migrate old single beginningBalance → split beginningCash / beginningLongTerm */
+  if (d.beginningCash == null) {
+    d.beginningCash = d.beginningBalance != null ? +d.beginningBalance : 0;
+  }
+  if (d.beginningLongTerm == null) d.beginningLongTerm = 0;
+  if (d.planCashYield == null)     d.planCashYield = 4;
+  if (d.planLtYield == null)       d.planLtYield = 7;
+  if (!d.customMilestones)         d.customMilestones = [];
   return d;
 }
 
@@ -113,4 +134,5 @@ Object.assign(window, {
   MONTHS, MONTHS_LONG, arr12,
   STARTER_DATA, BUCKETS, BUCKET_ORDER, BUCKET_CYCLE,
   sum, fmt, fmtAccurate, pct, pct1, uid, migrateData,
+  isLtSavings,
 });

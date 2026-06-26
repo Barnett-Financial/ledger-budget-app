@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ledger",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", ".", "--listen", "5174", "--no-clipboard"],
+      "port": 5174
+    }
+  ]
+}

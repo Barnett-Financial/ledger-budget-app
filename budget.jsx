@@ -27,6 +27,7 @@ function generateCSVTemplate() {
     '#   Number-formatted cells may add commas (e.g. 1,923) which will break the import.',
     '# Type column accepts: Income or Disbursement',
     '# Bucket column accepts: needs, wants, save, give',
+    '# Savings tip: name LT savings with "Retirement" or "Long-term"; cash savings with "Savings" or "Cash Savings"',
     '#',
   ];
   const rows = [
@@ -37,16 +38,18 @@ function generateCSVTemplate() {
     ['Disbursement','Housing','Utilities','needs','175','175','175','175','175','175','175','175','175','175','175','175'],
     ['Disbursement','Food','Groceries','needs','500','500','500','500','500','500','500','500','500','500','500','500'],
     ['Disbursement','Food','Restaurants','wants','125','125','125','125','125','125','125','125','125','125','125','125'],
-    ['Disbursement','Savings','Emergency fund','save','300','300','300','300','300','300','300','300','300','300','300','300'],
+    ['Disbursement','Savings','Cash Savings','save','300','300','300','300','300','300','300','300','300','300','300','300'],
+    ['Disbursement','Savings','Retirement (401k)','save','500','500','500','500','500','500','500','500','500','500','500','500'],
     ['Disbursement','Giving','Charitable giving','give','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200','1200'],
   ];
   return notes.join('\n') + '\n' + rows.map(r => r.map(v => v.includes(',') ? `"${v}"` : v).join(',')).join('\n');
 }
 
 function BudgetScreen({ data, setData }) {
-  const [colMode,    setColMode]    = React.useState('all');
-  const [focusMonth, setFocusMonth] = React.useState(new Date().getMonth());
-  const [saved,      setSaved]      = React.useState(false);
+  const [colMode,          setColMode]          = React.useState('all');
+  const [focusMonth,       setFocusMonth]       = React.useState(new Date().getMonth());
+  const [saved,            setSaved]            = React.useState(false);
+  const [showInstructions, setShowInstructions] = React.useState(false);
 
   /* --- Derived totals --- */
 
@@ -68,13 +71,43 @@ function BudgetScreen({ data, setData }) {
   const netMonthly = MONTHS.map((_, m) => incomeMonthly[m] - disbursementsMonthly[m]);
   const netAnnual  = sum(netMonthly);
 
-  const beginning = [];
-  const ending    = [];
-  let bal = +data.beginningBalance || 0;
+  /* --- Classify savings by name pattern --- */
+  /* LT: name includes "Retirement" or "Long-term"       */
+  /* Cash: everything else in the save bucket            */
+
+  const cashSavingsMonthly = MONTHS.map((_, m) => {
+    let s = 0;
+    data.groups.forEach(g => g.cats.forEach(c => {
+      if (c.bucket === 'save' && !isLtSavings(c.name)) s += c.monthly[m];
+    }));
+    return s;
+  });
+  const ltSavingsMonthly = MONTHS.map((_, m) => {
+    let s = 0;
+    data.groups.forEach(g => g.cats.forEach(c => {
+      if (c.bucket === 'save' && isLtSavings(c.name)) s += c.monthly[m];
+    }));
+    return s;
+  });
+
+  /* --- Rolling balances with monthly compounding --- */
+  /* beginCash[m+1] = beginCash[m] × (1 + cashRate) + cashSavings[m] */
+  /* beginLT[m+1]   = beginLT[m]   × (1 + ltRate)   + ltSavings[m]   */
+
+  const cashRate = (data.planCashYield || 0) / 100 / 12;
+  const ltRate   = (data.planLtYield   || 0) / 100 / 12;
+
+  const beginCash = [], endCash = [];
+  const beginLT   = [], endLT   = [];
+  let cashBal = +data.beginningCash     || 0;
+  let ltBal   = +data.beginningLongTerm || 0;
   MONTHS.forEach((_, m) => {
-    beginning.push(bal);
-    bal += netMonthly[m];
-    ending.push(bal);
+    beginCash.push(cashBal);
+    beginLT.push(ltBal);
+    cashBal = cashBal * (1 + cashRate) + cashSavingsMonthly[m];
+    ltBal   = ltBal   * (1 + ltRate)   + ltSavingsMonthly[m];
+    endCash.push(cashBal);
+    endLT.push(ltBal);
   });
 
   const bucketAnnual = { needs: 0, wants: 0, save: 0, give: 0, unalloc: 0 };
@@ -99,54 +132,54 @@ function BudgetScreen({ data, setData }) {
 
   /* --- Mutations --- */
 
-  const setIncomeCell  = (id, m, val) => setData(prev => ({
+  const setIncomeCell       = (id, m, val) => setData(prev => ({
     ...prev, income: prev.income.map(r =>
       r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r)
   }));
-  const setCatCell     = (gid, cid, m, val) => setData(prev => ({
+  const setCatCell          = (gid, cid, m, val) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
       ...g, cats: g.cats.map(c =>
         c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) })
     })
   }));
-  const setIncomeName  = (id, name) => setData(prev => ({
+  const setIncomeName       = (id, name) => setData(prev => ({
     ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r)
   }));
-  const setCatName     = (gid, cid, name) => setData(prev => ({
+  const setCatName          = (gid, cid, name) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
       ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name })
     })
   }));
-  const setGroupName   = (gid, name) => setData(prev => ({
+  const setGroupName        = (gid, name) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name })
   }));
-  const cycleBucket    = (gid, cid) => setData(prev => ({
+  const cycleBucket         = (gid, cid) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
       ...g, cats: g.cats.map(c => c.id !== cid ? c : {
         ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length]
       })
     })
   }));
-  const addIncome      = () => setData(prev => ({
+  const addIncome           = () => setData(prev => ({
     ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }]
   }));
-  const addCat         = (gid) => setData(prev => ({
+  const addCat              = (gid) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
       ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }]
     })
   }));
-  const addGroup       = () => setData(prev => ({
+  const addGroup            = () => setData(prev => ({
     ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }]
   }));
-  const delIncome      = (id) => setData(prev => ({
+  const delIncome           = (id) => setData(prev => ({
     ...prev, income: prev.income.filter(r => r.id !== id)
   }));
-  const delCat         = (gid, cid) => setData(prev => ({
+  const delCat              = (gid, cid) => setData(prev => ({
     ...prev, groups: prev.groups.map(g => g.id !== gid ? g : {
       ...g, cats: g.cats.filter(c => c.id !== cid)
     })
   }));
-  const delGroup       = (gid) => {
+  const delGroup            = (gid) => {
     const g = data.groups.find(gr => gr.id === gid);
     if (!g) return;
     const msg = g.cats.length > 0
@@ -155,8 +188,9 @@ function BudgetScreen({ data, setData }) {
     if (!confirm(msg)) return;
     setData(prev => ({ ...prev, groups: prev.groups.filter(gr => gr.id !== gid) }));
   };
-  const setBeginning   = (v) => setData(prev => ({ ...prev, beginningBalance: v }));
-  const copyJan        = () => setData(prev => ({
+  const setBeginningCash    = (v) => setData(prev => ({ ...prev, beginningCash:     v }));
+  const setBeginningLongTerm = (v) => setData(prev => ({ ...prev, beginningLongTerm: v }));
+  const copyJan             = () => setData(prev => ({
     ...prev,
     income: prev.income.map(r => ({ ...r, monthly: arr12(r.monthly[0]) })),
     groups: prev.groups.map(g => ({
@@ -165,7 +199,6 @@ function BudgetScreen({ data, setData }) {
   }));
 
   const handleSave = () => {
-    /* Data auto-saves; this gives visual feedback */
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -229,7 +262,7 @@ function BudgetScreen({ data, setData }) {
         <div>
           <h1>{data.year} <em>cash budget</em></h1>
           <div className="sub">
-            Estimate every dollar in and out, month by month. Click a colored dot to change a category's bucket — needs, wants, saving, or giving.
+            Estimate every dollar in and out, month by month.
           </div>
         </div>
         <div className="actions">
@@ -242,11 +275,63 @@ function BudgetScreen({ data, setData }) {
         </div>
       </div>
 
+      {/* ---- Instructions collapsible ---- */}
+      <div style={{
+        marginBottom: 20,
+        border: '1px solid var(--line)',
+        borderRadius: 'var(--r-md)',
+        background: 'var(--surface)',
+        overflow: 'hidden',
+      }}>
+        <button
+          style={{
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '11px 18px',
+            fontWeight: 500,
+            fontSize: 13.5,
+            textAlign: 'left',
+          }}
+          onClick={() => setShowInstructions(v => !v)}
+        >
+          <span>Instructions</span>
+          <span style={{ color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            {showInstructions ? '▲ Hide' : '▼ Show'}
+          </span>
+        </button>
+        {showInstructions && (
+          <div style={{
+            padding: '4px 24px 18px',
+            borderTop: '1px solid var(--line-soft)',
+            fontSize: 13.5,
+            lineHeight: 1.65,
+            color: 'var(--ink-soft)',
+          }}>
+            <ul style={{ margin: '10px 0 0', padding: '0 0 0 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <li>
+                <strong>Bucket assignment:</strong> Click a colored dot (●) next to any category to cycle its bucket — Needs, Wants, Saving, or Giving.
+              </li>
+              <li>
+                <strong>Cash savings:</strong> Net monthly income is automatically tracked. Alternatively, include a disbursement category with <em>"Savings"</em> or <em>"Cash Savings"</em> in the name. These feed the <strong>Beginning Cash</strong> balance and compound monthly at the Cash Yield set in the Plan tab.
+              </li>
+              <li>
+                <strong>Long-term investments:</strong> Include a savings-bucket category with <em>"Retirement"</em> or <em>"Long-term"</em> in the name (e.g., "Retirement (401k)", "Long-term Investment"). These feed the <strong>Beginning Long-term Invest</strong> balance and compound monthly at the Long-term Yield set in the Plan tab.
+              </li>
+              <li>
+                <strong>Beginning balances</strong> are editable in January (month 1). Subsequent months are computed automatically, compounding each month at the rates from the Plan tab.
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+
       <div className="kpis">
-        <Kpi label="Annual income"       value={incomeAnnual} />
-        <Kpi label="Annual outflow"      value={disbursementsAnnual} />
-        <Kpi label="Net to balance sheet" value={netAnnual + bucketAnnual.save} tone={(netAnnual + bucketAnnual.save) < 0 ? 'neg' : 'pos'} />
-        <Kpi label="Year-end balance"    value={ending[11]} />
+        <Kpi label="Annual income"        value={incomeAnnual} />
+        <Kpi label="Annual outflow"       value={disbursementsAnnual} />
+        <Kpi label="Annual savings"       value={bucketAnnual.save} tone={bucketAnnual.save > 0 ? 'pos' : undefined} />
+        <Kpi label="Year-end total wealth" value={Math.round(endCash[11] + endLT[11])} />
       </div>
 
       <div className="sheet-toolbar">
@@ -293,8 +378,10 @@ function BudgetScreen({ data, setData }) {
             disbursementsAnnual={disbursementsAnnual}
             netMonthly={netMonthly}
             netAnnual={netAnnual}
-            beginning={beginning}
-            ending={ending}
+            beginCash={beginCash}
+            endCash={endCash}
+            beginLT={beginLT}
+            endLT={endLT}
             setIncomeCell={setIncomeCell}
             setCatCell={setCatCell}
             setIncomeName={setIncomeName}
@@ -307,7 +394,8 @@ function BudgetScreen({ data, setData }) {
             delIncome={delIncome}
             delCat={delCat}
             delGroup={delGroup}
-            setBeginning={setBeginning}
+            setBeginningCash={setBeginningCash}
+            setBeginningLongTerm={setBeginningLongTerm}
           />
         </div>
       </div>
@@ -339,9 +427,10 @@ function Sheet(props) {
     groupTotals,
     disbursementsMonthly, disbursementsAnnual,
     netMonthly, netAnnual,
-    beginning, ending,
+    beginCash, endCash, beginLT, endLT,
     setIncomeCell, setCatCell, setIncomeName, setCatName, setGroupName,
-    cycleBucket, addIncome, addCat, addGroup, delIncome, delCat, delGroup, setBeginning,
+    cycleBucket, addIncome, addCat, addGroup, delIncome, delCat, delGroup,
+    setBeginningCash, setBeginningLongTerm,
   } = props;
 
   /* Dynamic grid template based on how many months are visible */
@@ -360,15 +449,41 @@ function Sheet(props) {
         <div></div>
       </div>
 
-      {/* Beginning balance */}
+      {/* Beginning Cash Savings */}
       <div className="row balance begin" style={rs}>
         <div></div>
-        <div className="name">Beginning balance</div>
+        <div className="name" style={{ fontSize: 12.5 }}>
+          Beginning Cash Savings
+          <span style={{ color: 'var(--muted)', fontSize: 10.5, marginLeft: 6 }}>
+            @ {(data.planCashYield || 0).toFixed(1)}% yield
+          </span>
+        </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month">
             {m === 0
-              ? <NumberInput value={data.beginningBalance} onChange={setBeginning} />
-              : <span className={beginning[m] < 0 ? 'neg' : ''}>{fmt(beginning[m])}</span>
+              ? <NumberInput value={data.beginningCash} onChange={setBeginningCash} />
+              : <span>{fmt(beginCash[m])}</span>
+            }
+          </div>
+        ))}
+        <div className="num annual">—</div>
+        <div></div>
+      </div>
+
+      {/* Beginning Long-term Invest */}
+      <div className="row balance begin" style={{ ...rs, borderBottom: '1px solid var(--line)' }}>
+        <div></div>
+        <div className="name" style={{ fontSize: 12.5 }}>
+          Beginning Long-term Invest
+          <span style={{ color: 'var(--muted)', fontSize: 10.5, marginLeft: 6 }}>
+            @ {(data.planLtYield || 0).toFixed(1)}% yield
+          </span>
+        </div>
+        {visibleMonths.map(m => (
+          <div key={m} className="num month">
+            {m === 0
+              ? <NumberInput value={data.beginningLongTerm} onChange={setBeginningLongTerm} />
+              : <span>{fmt(beginLT[m])}</span>
             }
           </div>
         ))}
@@ -510,16 +625,20 @@ function Sheet(props) {
         <div></div>
       </div>
 
-      {/* Ending balance */}
-      <div className={'row balance ' + (ending.some(e => e < 0) ? 'neg' : '')} style={rs}>
+      {/* Total savings wealth (Cash + LT) */}
+      <div className="row balance" style={rs}>
         <div></div>
-        <div className="name">Ending balance</div>
+        <div className="name" style={{ fontStyle: 'italic', color: 'var(--accent)' }}>
+          Total savings (Cash + LT)
+        </div>
         {visibleMonths.map(m => (
-          <div key={m} className={'num month ' + (ending[m] < 0 ? 'neg' : '')}>
-            {fmt(ending[m])}
+          <div key={m} className="num month" style={{ color: 'var(--accent)' }}>
+            {fmt(Math.round(endCash[m] + endLT[m]))}
           </div>
         ))}
-        <div className="num annual">{fmt(ending[11])}</div>
+        <div className="num annual" style={{ color: 'var(--accent)' }}>
+          {fmt(Math.round(endCash[11] + endLT[11]))}
+        </div>
         <div></div>
       </div>
     </div>
@@ -624,4 +743,22 @@ function NumberInput({ value, onChange, dim }) {
   );
 }
 
-function Kpi({ label, value, tone, integer, suffix, pct:
+function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
+  let text;
+  if (pctMode)      text = value + '%';
+  else if (integer) text = String(value) + (suffix || '');
+  else              text = fmt(value, { zero: '$0' });
+  return (
+    <div className="kpi">
+      <div className="lbl">{label}</div>
+      <div className="val">{text}</div>
+      {tone && (
+        <div className={'delta ' + tone}>
+          {tone === 'pos' ? 'positive savings' : 'over budget'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { BudgetScreen, AllocationSummary, Kpi, NumberInput });
