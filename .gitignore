@@ -11,3 +11,5 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+*.backup.js
+*.backup.html

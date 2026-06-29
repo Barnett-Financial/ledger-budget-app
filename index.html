@@ -68,10 +68,11 @@ function generateCSVTemplate() {
 
 /* ---- BudgetScreen ---- */
 function BudgetScreen({ data, setData }) {
-  const [colMode,          setColMode]          = React.useState('all');
-  const [focusMonth,       setFocusMonth]       = React.useState(new Date().getMonth());
-  const [saved,            setSaved]            = React.useState(false);
-  const [showInstructions, setShowInstructions] = React.useState(false);
+  const [colMode,            setColMode]            = React.useState('all');
+  const [focusMonth,         setFocusMonth]         = React.useState(new Date().getMonth());
+  const [saved,              setSaved]              = React.useState(false);
+  const [showInstructions,   setShowInstructions]   = React.useState(false);
+  const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
 
   const incomeMonthly = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m])));
   const incomeAnnual  = sum(incomeMonthly);
@@ -101,16 +102,28 @@ function BudgetScreen({ data, setData }) {
     return s;
   });
 
+  /* Debt payments = any category with "debt" or "interest" in name */
+  const debtPaymentsMonthly = MONTHS.map((_, m) => {
+    let s = 0;
+    data.groups.forEach(g => g.cats.forEach(c => {
+      if (isDebtPayment(c.name)) s += (c.monthly[m] || 0);
+    }));
+    return s;
+  });
+
   const cashRate = (data.planCashYield || 0) / 100 / 12;
   const ltRate   = (data.planLtYield   || 0) / 100 / 12;
-  const beginCash = [], endCash = [], beginLT = [], endLT = [];
+  const debtRate = (data.debtInterestRate || 0) / 100 / 12;
+  const beginCash = [], endCash = [], beginLT = [], endLT = [], beginDebt = [], endDebt = [];
   let cashBal = +data.beginningCash     || 0;
   let ltBal   = +data.beginningLongTerm || 0;
+  let debtBal = +data.beginningDebt     || 0;
   MONTHS.forEach((_, m) => {
-    beginCash.push(cashBal); beginLT.push(ltBal);
+    beginCash.push(cashBal); beginLT.push(ltBal); beginDebt.push(debtBal);
     cashBal = cashBal * (1 + cashRate) + cashSavingsMonthly[m];
     ltBal   = ltBal   * (1 + ltRate)   + ltSavingsMonthly[m];
-    endCash.push(cashBal); endLT.push(ltBal);
+    debtBal = Math.max(0, debtBal * (1 + debtRate) - debtPaymentsMonthly[m]);
+    endCash.push(cashBal); endLT.push(ltBal); endDebt.push(debtBal);
   });
 
   const bucketAnnual = { needs: 0, wants: 0, save: 0, give: 0, unalloc: 0 };
@@ -128,18 +141,18 @@ function BudgetScreen({ data, setData }) {
     return [focusMonth];
   }, [colMode, focusMonth]);
 
-  const setIncomeCell  = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
-  const setCatCell     = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
-  const setIncomeName  = (id, name) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r) }));
-  const setCatName     = (gid, cid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name }) }) }));
-  const setGroupName   = (gid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name }) }));
-  const cycleBucket    = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length] }) }) }));
-  const addIncome      = () => setData(prev => ({ ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }] }));
-  const addCat         = (gid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }] }) }));
-  const addGroup       = () => setData(prev => ({ ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }] }));
-  const delIncome      = (id) => setData(prev => ({ ...prev, income: prev.income.filter(r => r.id !== id) }));
-  const delCat         = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.filter(c => c.id !== cid) }) }));
-  const delGroup       = (gid) => {
+  const setIncomeCell      = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
+  const setCatCell         = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
+  const setIncomeName      = (id, name) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r) }));
+  const setCatName         = (gid, cid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name }) }) }));
+  const setGroupName       = (gid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name }) }));
+  const cycleBucket        = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, bucket: BUCKET_CYCLE[(BUCKET_CYCLE.indexOf(c.bucket) + 1) % BUCKET_CYCLE.length] }) }) }));
+  const addIncome          = () => setData(prev => ({ ...prev, income: [...prev.income, { id: 'inc_' + uid(), name: '', monthly: arr12(0) }] }));
+  const addCat             = (gid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: [...g.cats, { id: 'c_' + uid(), name: '', bucket: 'needs', monthly: arr12(0) }] }) }));
+  const addGroup           = () => setData(prev => ({ ...prev, groups: [...prev.groups, { id: 'g_' + uid(), name: 'New Group', cats: [] }] }));
+  const delIncome          = (id) => setData(prev => ({ ...prev, income: prev.income.filter(r => r.id !== id) }));
+  const delCat             = (gid, cid) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.filter(c => c.id !== cid) }) }));
+  const delGroup           = (gid) => {
     const g = data.groups.find(gr => gr.id === gid); if (!g) return;
     const msg = g.cats.length > 0
       ? 'Delete "' + g.name + '" and its ' + g.cats.length + ' categor' + (g.cats.length === 1 ? 'y' : 'ies') + '? This cannot be undone.'
@@ -147,8 +160,10 @@ function BudgetScreen({ data, setData }) {
     if (!confirm(msg)) return;
     setData(prev => ({ ...prev, groups: prev.groups.filter(gr => gr.id !== gid) }));
   };
-  const setBeginningCash     = (v) => setData(prev => ({ ...prev, beginningCash:     v }));
-  const setBeginningLongTerm = (v) => setData(prev => ({ ...prev, beginningLongTerm: v }));
+  const setBeginningCash      = (v) => setData(prev => ({ ...prev, beginningCash:      v }));
+  const setBeginningLongTerm  = (v) => setData(prev => ({ ...prev, beginningLongTerm:  v }));
+  const setBeginningDebt      = (v) => setData(prev => ({ ...prev, beginningDebt:      v }));
+  const setDebtInterestRate   = (v) => setData(prev => ({ ...prev, debtInterestRate:   v }));
   const copyJan  = () => setData(prev => ({ ...prev, income: prev.income.map(r => ({ ...r, monthly: arr12(r.monthly[0]) })), groups: prev.groups.map(g => ({ ...g, cats: g.cats.map(c => ({ ...c, monthly: arr12(c.monthly[0]) })) })) }));
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
@@ -224,6 +239,7 @@ function BudgetScreen({ data, setData }) {
               <li><strong>Bucket assignment:</strong> Click a colored dot next to any category to cycle its bucket: Needs, Wants, Saving, or Giving.</li>
               <li><strong>Cash savings:</strong> Categories with <em>Savings</em> or <em>Cash Savings</em> in the name feed the <strong>Beginning Cash</strong> balance, compounding monthly at the Cash Yield set in the Plan tab.</li>
               <li><strong>Long-term investments:</strong> Categories with <em>Retirement</em> or <em>Long-term</em> in the name feed the <strong>Beginning Long-term Invest</strong> balance, compounding at the Long-term Yield from the Plan tab.</li>
+              <li><strong>Debt payments:</strong> Categories with <em>Debt</em> or <em>Interest</em> in the name automatically reduce the Beginning Debt balance each month.</li>
               <li><strong>Beginning balances</strong> are editable in January only. Subsequent months are auto-computed.</li>
             </ul>
           </div>
@@ -236,6 +252,12 @@ function BudgetScreen({ data, setData }) {
         <Kpi label="Annual savings"        value={bucketAnnual.save} tone={bucketAnnual.save > 0 ? 'pos' : undefined} />
         <Kpi label="Year-end total wealth" value={Math.round(endCash[11] + endLT[11])} />
       </div>
+
+      <AllocationSummary
+        bucketAnnual={bucketAnnual} bucketMonthlyAvg={bucketMonthlyAvg}
+        incomeAnnual={incomeAnnual} incomeMonthlyAvg={incomeAnnual / 12}
+        groupTotals={groupTotals} groups={data.groups}
+      />
 
       <div className="sheet-toolbar">
         <div className="left">
@@ -273,26 +295,32 @@ function BudgetScreen({ data, setData }) {
             disbursementsMonthly={disbursementsMonthly} disbursementsAnnual={disbursementsAnnual}
             netMonthly={netMonthly} netAnnual={netAnnual}
             beginCash={beginCash} endCash={endCash} beginLT={beginLT} endLT={endLT}
+            beginDebt={beginDebt} endDebt={endDebt}
+            debtInterestRate={data.debtInterestRate || 0}
             setIncomeCell={setIncomeCell} setCatCell={setCatCell}
             setIncomeName={setIncomeName} setCatName={setCatName} setGroupName={setGroupName}
             cycleBucket={cycleBucket}
             addIncome={addIncome} addCat={addCat} addGroup={addGroup}
             delIncome={delIncome} delCat={delCat} delGroup={delGroup}
             setBeginningCash={setBeginningCash} setBeginningLongTerm={setBeginningLongTerm}
+            setBeginningDebt={setBeginningDebt}
+            onDebtRateClick={() => setShowDebtRateModal(true)}
           />
         </div>
       </div>
-
-      <AllocationSummary
-        bucketAnnual={bucketAnnual} bucketMonthlyAvg={bucketMonthlyAvg}
-        incomeAnnual={incomeAnnual} incomeMonthlyAvg={incomeAnnual / 12}
-        groupTotals={groupTotals} groups={data.groups}
-      />
 
       <div className="foot-note">
         <span>Click a colored dot to cycle a category between needs / wants / saving / giving.</span>
         <span>Changes saved automatically.</span>
       </div>
+
+      {showDebtRateModal && (
+        <DebtRateModal
+          currentRate={data.debtInterestRate || 0}
+          onSave={setDebtInterestRate}
+          onClose={() => setShowDebtRateModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -304,9 +332,10 @@ function Sheet(props) {
     disbursementsMonthly, disbursementsAnnual,
     netMonthly, netAnnual,
     beginCash, endCash, beginLT, endLT,
+    beginDebt, endDebt, debtInterestRate,
     setIncomeCell, setCatCell, setIncomeName, setCatName, setGroupName,
     cycleBucket, addIncome, addCat, addGroup, delIncome, delCat, delGroup,
-    setBeginningCash, setBeginningLongTerm,
+    setBeginningCash, setBeginningLongTerm, setBeginningDebt, onDebtRateClick,
   } = props;
 
   const n  = visibleMonths.length;
@@ -335,7 +364,7 @@ function Sheet(props) {
         <div className="num annual">&#8212;</div><div></div>
       </div>
 
-      <div className="row balance begin" style={{ ...rs, borderBottom:'1px solid var(--line)' }}>
+      <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
           Beginning Long-term Invest
@@ -344,6 +373,27 @@ function Sheet(props) {
         {visibleMonths.map(m => (
           <div key={m} className="num month">
             {m === 0 ? <NumberInput value={data.beginningLongTerm} onChange={setBeginningLongTerm} /> : <span>{fmt(beginLT[m])}</span>}
+          </div>
+        ))}
+        <div className="num annual">&#8212;</div><div></div>
+      </div>
+
+      <div className="row balance begin" style={{ ...rs, borderBottom:'1px solid var(--line)' }}>
+        <div></div>
+        <div className="name" style={{ fontSize:12.5 }}>
+          Beginning Debt
+          <button
+            onClick={onDebtRateClick}
+            title="Set debt interest rate"
+            style={{ marginLeft:6, fontSize:10.5, color:'var(--warn)', background:'rgba(200,54,43,0.08)', border:'1px solid rgba(200,54,43,0.25)', borderRadius:4, padding:'1px 7px', cursor:'pointer', fontFamily:'var(--mono)' }}>
+            {(debtInterestRate||0).toFixed(1)}% rate
+          </button>
+        </div>
+        {visibleMonths.map(m => (
+          <div key={m} className="num month" style={{ color:'var(--warn)' }}>
+            {m === 0
+              ? <NumberInput value={data.beginningDebt} onChange={setBeginningDebt} />
+              : beginDebt[m] > 0 ? <span>{fmt(beginDebt[m])}</span> : <span style={{ color:'var(--muted)' }}>&#8212;</span>}
           </div>
         ))}
         <div className="num annual">&#8212;</div><div></div>
@@ -388,7 +438,7 @@ function Sheet(props) {
             <div className="row group" style={rs}>
               <div></div>
               <div className="name"><input value={g.name} placeholder="Group name" onChange={e => setGroupName(g.id, e.target.value)} style={{ fontWeight:500 }} /></div>
-              {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'\xB7' })}</div>)}
+              {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'-' })}</div>)}
               <div className="num annual">{fmt(gt.annual)}</div>
               <button className="row-del" onClick={() => delGroup(g.id)}>&#215;</button>
             </div>
@@ -427,7 +477,10 @@ function Sheet(props) {
       </div>
 
       <div className="row net" style={rs}>
-        <div></div><div className="name">Net income</div>
+        <div></div>
+        <div className="name" style={{ color: netAnnual < 0 ? 'var(--warn)' : 'var(--ink)' }}>
+          {netAnnual < 0 ? 'Over allocated' : 'Under allocated'}
+        </div>
         {visibleMonths.map(m => (
           <div key={m} className={'num month ' + (netMonthly[m] < 0 ? 'neg' : '')}>
             {fmt(netMonthly[m], { sign:true, zero:'$0' })}
@@ -510,7 +563,7 @@ function NumberInput({ value, onChange, dim }) {
   const [text, setText] = React.useState(value === 0 ? '' : String(value));
   React.useEffect(() => { setText(value === 0 ? '' : (Math.round(value * 100) / 100).toString()); }, [value]);
   return (
-    <input value={text} placeholder="\xB7" inputMode="decimal"
+    <input value={text} placeholder="-" inputMode="decimal"
       onChange={e => { const t = e.target.value.replace(/[^\d.\-]/g, ''); setText(t); onChange(parseFloat(t) || 0); }}
       style={dim && (!value || value === 0) ? { color:'var(--muted)', opacity:0.6 } : undefined}
     />
@@ -526,6 +579,38 @@ function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
       <div className="lbl">{label}</div>
       <div className="val">{text}</div>
       {tone && <div className={'delta ' + tone}>{tone === 'pos' ? 'positive savings' : 'over budget'}</div>}
+    </div>
+  );
+}
+
+function DebtRateModal({ currentRate, onSave, onClose }) {
+  const [rate, setRate] = React.useState(String(currentRate));
+  const handleSave = () => {
+    const r = parseFloat(rate);
+    if (!isNaN(r) && r >= 0 && r <= 100) onSave(r);
+    onClose();
+  };
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
+        <div className="modal-head">
+          <h2>Debt interest rate</h2>
+          <button className="modal-close" onClick={onClose}>&#215;</button>
+        </div>
+        <div className="form-field">
+          <label>Annual interest rate (%)</label>
+          <input type="number" className="form-input" value={rate}
+            onChange={e => setRate(e.target.value)}
+            min="0" max="100" step="0.25" autoFocus placeholder="e.g. 6.5" />
+        </div>
+        <p style={{ fontSize:12.5, color:'var(--muted)', margin:'-4px 0 16px' }}>
+          Used to accrue monthly interest on your Beginning Debt balance. Categories named with "debt" or "interest" automatically reduce the balance each month.
+        </p>
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={handleSave}>Save</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -557,6 +642,9 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
   const totAct = sum(cats.map(c => c.actual));
   const incomeBud = sum(data.income.map(r => r.monthly[monthIdx]));
   const remaining = totBud - totAct;
+
+  /* Budget spent percentage */
+  const spentPct = totBud > 0 ? Math.round((totAct / totBud) * 100) : 0;
 
   const today = new Date();
   const isCurrentMonth = today.getFullYear() === data.year && today.getMonth() === monthIdx;
@@ -597,7 +685,7 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
         <Kpi label="Income budgeted" value={incomeBud} />
         <Kpi label="Spent so far"    value={totAct} />
         <Kpi label="Left in budget"  value={remaining} tone={remaining < 0 ? 'neg' : (totAct > 0 ? 'pos' : undefined)} />
-        <Kpi label="Month progress"  value={monthPct} pct />
+        <Kpi label="Budget used"     value={spentPct} pct />
       </div>
 
       {showTransactions ? (
@@ -640,7 +728,7 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
               </div>
             ))}
             <div className="summary-row" style={{ borderTop:'1px solid var(--line)', marginTop:4 }}>
-              <span className="l">Net vs budget</span>
+              <span className="l">Remaining Budget</span>
               <span className="r" style={{ color: remaining < 0 ? 'var(--warn)' : 'var(--save)' }}>{fmt(remaining, { sign:true, zero:'$0' })}</span>
             </div>
             <div style={{ marginTop:16 }}>
@@ -889,15 +977,27 @@ function PlanScreen({ data, setData }) {
     return Math.round(s / 12);
   }, [data.groups]);
 
+  /* Default debt payment from budget categories with "debt" or "interest" in name */
+  const debtPaymentDefault = React.useMemo(() => {
+    let s = 0;
+    data.groups.forEach(g => g.cats.forEach(c => { if (isDebtPayment(c.name)) s += sum(c.monthly); }));
+    return Math.round(s / 12);
+  }, [data.groups]);
+
   const incomeTotalMonthly = React.useMemo(() => Math.round(sum(data.income.map(r => sum(r.monthly))) / 12), [data.income]);
 
-  const [cashContrib, setCashContrib] = React.useState(() => cashContribDefault > 0 ? cashContribDefault : 200);
-  const [ltContrib,   setLtContrib]   = React.useState(() => ltContribDefault   > 0 ? ltContribDefault   : 600);
-  const [cashYield,   setCashYield]   = React.useState(data.planCashYield != null ? data.planCashYield : 4);
-  const [ltYield,     setLtYield]     = React.useState(data.planLtYield   != null ? data.planLtYield   : 7);
-  const [years,       setYears]       = React.useState(10);
-  const [startCash,   setStartCash]   = React.useState(data.beginningCash     != null ? data.beginningCash     : 0);
-  const [startLT,     setStartLT]     = React.useState(data.beginningLongTerm != null ? data.beginningLongTerm : 0);
+  /* Fix #5: Cash default is always the budget value (no 200 fallback) */
+  const [cashContrib,        setCashContrib]        = React.useState(() => cashContribDefault);
+  const [ltContrib,          setLtContrib]          = React.useState(() => ltContribDefault > 0 ? ltContribDefault : 600);
+  const [debtPaymentMonthly, setDebtPaymentMonthly] = React.useState(() => debtPaymentDefault);
+  const [cashYield,          setCashYield]          = React.useState(data.planCashYield  != null ? data.planCashYield  : 4);
+  const [ltYield,            setLtYield]            = React.useState(data.planLtYield    != null ? data.planLtYield    : 7);
+  const [years,              setYears]              = React.useState(10);
+  const [startCash,          setStartCash]          = React.useState(data.beginningCash     != null ? data.beginningCash     : 0);
+  const [startLT,            setStartLT]            = React.useState(data.beginningLongTerm != null ? data.beginningLongTerm : 0);
+  const [startDebt,          setStartDebt]          = React.useState(data.beginningDebt     != null ? data.beginningDebt     : 0);
+
+  const debtInterestRate = data.debtInterestRate || 0;
 
   const updateCashYield = (v) => { setCashYield(v); setData(d => ({ ...d, planCashYield: v })); };
   const updateLtYield   = (v) => { setLtYield(v);   setData(d => ({ ...d, planLtYield:   v })); };
@@ -910,20 +1010,23 @@ function PlanScreen({ data, setData }) {
   const months = years * 12;
 
   const seriesTotal = React.useMemo(() => {
-    const out = []; let cash = startCash, lt = startLT;
+    const out = [];
+    let cash = startCash, lt = startLT, debt = startDebt;
     const rC = cashYield / 100 / 12, rL = ltYield / 100 / 12;
+    const rD = debtInterestRate / 100 / 12;
     for (let m = 0; m <= months; m++) {
-      out.push({ m, bal: cash + lt, cash, lt });
+      out.push({ m, bal: cash + lt - debt, cash, lt, debt });
       cash = cash * (1 + rC) + cashContrib;
       lt   = lt   * (1 + rL) + ltContrib;
+      debt = Math.max(0, debt * (1 + rD) - debtPaymentMonthly);
     }
     return out;
-  }, [months, cashYield, ltYield, startCash, startLT, cashContrib, ltContrib]);
+  }, [months, cashYield, ltYield, startCash, startLT, cashContrib, ltContrib, startDebt, debtPaymentMonthly, debtInterestRate]);
 
   const last = seriesTotal[seriesTotal.length - 1];
-  const finalBal = last.bal, finalCash = last.cash, finalLT = last.lt;
-  const contributed = (startCash + startLT) + (cashContrib + ltContrib) * months;
-  const earned      = finalBal - contributed;
+  const finalBal = last.bal, finalCash = last.cash, finalLT = last.lt, finalDebt = last.debt;
+  const grossInvested = (startCash + startLT) + (cashContrib + ltContrib) * months;
+  const earned        = (finalCash + finalLT) - grossInvested;
 
   function monthsToReachTotal(target) {
     if ((startCash + startLT) >= target) return 0;
@@ -945,22 +1048,36 @@ function PlanScreen({ data, setData }) {
     return null;
   }
 
+  function monthsToBeDebtFree(startD, annualRate, payment) {
+    if (startD <= 0) return 0;
+    if (payment <= 0) return null;
+    const r = annualRate / 100 / 12;
+    let d = startD;
+    for (let m = 1; m <= 12 * 80; m++) {
+      d = d * (1 + r) - payment;
+      if (d <= 0) return m;
+    }
+    return null;
+  }
+
   let monthlyNeedsWants = 0;
   data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'needs' || c.bucket === 'wants') monthlyNeedsWants += sum(c.monthly) / 12; }));
   if (monthlyNeedsWants === 0) monthlyNeedsWants = 3000;
 
+  /* Sabbatical replaced by Debt Free (computed separately below) */
   const presetMilestones = [
-    { name: 'Emergency fund',         detail: '3 months of essentials',  target: monthlyNeedsWants * 3 },
-    { name: 'House down payment',     detail: '20% on a $450k home',     target: 90000 },
-    { name: 'Sabbatical fund',        detail: '6 months of income',      target: incomeTotalMonthly * 6 },
+    { name: 'Emergency fund',         detail: '3 months of essentials',   target: monthlyNeedsWants * 3 },
+    { name: 'House down payment',     detail: '20% on a $450k home',      target: 90000 },
     { name: 'Financial independence', detail: '25\xD7 annual essentials', target: monthlyNeedsWants * 12 * 25 },
   ];
 
   const resetToBudget = () => {
     setStartCash(data.beginningCash  || 0);
     setStartLT(data.beginningLongTerm || 0);
-    setCashContrib(cashContribDefault > 0 ? cashContribDefault : 200);
-    setLtContrib(ltContribDefault     > 0 ? ltContribDefault   : 600);
+    setStartDebt(data.beginningDebt  || 0);
+    setCashContrib(cashContribDefault);
+    setLtContrib(ltContribDefault > 0 ? ltContribDefault : 600);
+    setDebtPaymentMonthly(debtPaymentDefault);
     setCashYield(data.planCashYield || 4);
     setLtYield(data.planLtYield     || 7);
   };
@@ -980,35 +1097,41 @@ function PlanScreen({ data, setData }) {
       <div className="kpis">
         <Kpi label="Cash / month"        value={cashContrib} />
         <Kpi label="Long-term / month"   value={ltContrib} />
-        <Kpi label="Projected total"     value={Math.round(finalBal)} />
+        <Kpi label="Projected net worth" value={Math.round(finalBal)} />
         <Kpi label="Growth from returns" value={Math.round(earned)} />
       </div>
 
       <div className="plan-grid">
-        <div className="chart-card">
+        <div className="chart-card" style={{ position:'sticky', top:80, alignSelf:'start' }}>
           <h3>Projected balance</h3>
           <div className="caption">
-            Cash: {fmt(cashContrib, { zero:'$0' })}/mo @ {cashYield}% &middot; Long-term: {fmt(ltContrib, { zero:'$0' })}/mo @ {ltYield}% &middot; starting from {fmt(Math.round(startCash + startLT), { zero:'$0' })}.
+            Cash: {fmt(cashContrib, { zero:'$0' })}/mo @ {cashYield}%
+            {' · '}Long-term: {fmt(ltContrib, { zero:'$0' })}/mo @ {ltYield}%
+            {startDebt > 0 ? ' · Debt: ' + fmt(Math.round(startDebt), { zero:'$0' }) + ' @ ' + debtInterestRate.toFixed(1) + '%' : ''}
+            {' · '}starting from {fmt(Math.round(startCash + startLT), { zero:'$0' })}.
           </div>
           <ProjectionChart series={seriesTotal} years={years} />
-          <div style={{ display:'flex', gap:24, marginTop:14, fontSize:12, color:'var(--muted)' }}>
+          <div style={{ display:'flex', gap:24, marginTop:14, fontSize:12, color:'var(--muted)', flexWrap:'wrap' }}>
             <span>Cash at yr {years}: <strong style={{ color:'var(--ink)', fontFamily:'var(--mono)' }}>{fmt(Math.round(finalCash))}</strong></span>
-            <span>Long-term at yr {years}: <strong style={{ color:'var(--ink)', fontFamily:'var(--mono)' }}>{fmt(Math.round(finalLT))}</strong></span>
+            <span>LT at yr {years}: <strong style={{ color:'var(--ink)', fontFamily:'var(--mono)' }}>{fmt(Math.round(finalLT))}</strong></span>
+            {startDebt > 0 && <span>Debt at yr {years}: <strong style={{ color:'var(--warn)', fontFamily:'var(--mono)' }}>{finalDebt > 0 ? fmt(Math.round(finalDebt)) : 'Paid off'}</strong></span>}
           </div>
         </div>
 
         <div className="plan-controls">
           <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'0 2px 2px' }}>Monthly contributions</div>
-          <Slider label="Cash savings / month"          value={cashContrib} min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setCashContrib} ends={['$0','$5,000']} />
-          <Slider label="Long-term investments / month" value={ltContrib}   min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setLtContrib}   ends={['$0','$5,000']} />
-          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Annual yields</div>
-          <Slider label="Cash yield"                    value={cashYield}   min={0} max={10}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateCashYield} ends={['0%','10%']} />
-          <Slider label="Long-term investment yield"    value={ltYield}     min={0} max={15}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateLtYield}   ends={['0%','15%']} />
-          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Starting balances</div>
-          <Slider label="Starting cash balance"         value={startCash}   min={0} max={500000} step={500}  format={v => fmt(v, { zero:'$0' })} onChange={setStartCash}    ends={['$0','$500k']} />
-          <Slider label="Starting long-term balance"    value={startLT}     min={0} max={1000000} step={1000} format={v => fmt(v, { zero:'$0' })} onChange={setStartLT}     ends={['$0','$1M']} />
-          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'8px 2px 2px' }}>Time horizon</div>
-          <Slider label="Years to project"              value={years}       min={1} max={40}     step={1}    format={v => v + ' years'}           onChange={setYears}        ends={['1 yr','40 yrs']} />
+          <Slider compact label="Cash savings / month"          value={cashContrib}        min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setCashContrib}        ends={['$0','$5k']} />
+          <Slider compact label="Long-term investments / month" value={ltContrib}          min={0} max={5000}   step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setLtContrib}          ends={['$0','$5k']} />
+          <Slider compact label="Debt payment / month"         value={debtPaymentMonthly} min={0} max={10000}  step={50}   format={v => fmt(v, { zero:'$0' })} onChange={setDebtPaymentMonthly} ends={['$0','$10k']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'6px 2px 2px' }}>Annual yields</div>
+          <Slider compact label="Cash yield"                   value={cashYield}          min={0} max={10}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateCashYield}       ends={['0%','10%']} />
+          <Slider compact label="Long-term investment yield"   value={ltYield}            min={0} max={15}     step={0.25} format={v => v.toFixed(2) + '%'}    onChange={updateLtYield}         ends={['0%','15%']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'6px 2px 2px' }}>Starting balances</div>
+          <Slider compact label="Starting cash balance"        value={startCash}          min={0} max={500000} step={500}  format={v => fmt(v, { zero:'$0' })} onChange={setStartCash}          ends={['$0','$500k']} />
+          <Slider compact label="Starting long-term balance"  value={startLT}            min={0} max={1000000} step={1000} format={v => fmt(v, { zero:'$0' })} onChange={setStartLT}           ends={['$0','$1M']} />
+          <Slider compact label="Starting debt balance"       value={startDebt}          min={0} max={1000000} step={1000} format={v => fmt(v, { zero:'$0' })} onChange={setStartDebt}         ends={['$0','$1M']} />
+          <div style={{ fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.12em', color:'var(--muted)', padding:'6px 2px 2px' }}>Time horizon</div>
+          <Slider compact label="Years to project"             value={years}              min={1} max={40}     step={1}    format={v => v + ' years'}           onChange={setYears}              ends={['1 yr','40 yrs']} />
         </div>
       </div>
 
@@ -1029,6 +1152,35 @@ function PlanScreen({ data, setData }) {
             </div>
           );
         })}
+
+        {/* Debt Free milestone (replaces Sabbatical) */}
+        {(() => {
+          if (startDebt <= 0) {
+            return (
+              <div className="milestone-row">
+                <div className="ms-name"><strong>Debt free</strong><span>No debt balance set</span></div>
+                <div className="ms-eta">now</div>
+                <div className="ms-pct">100%</div>
+              </div>
+            );
+          }
+          const eta       = monthsToBeDebtFree(startDebt, debtInterestRate, debtPaymentMonthly);
+          const paidSoFar = startDebt - finalDebt;
+          const p         = Math.min(100, startDebt > 0 ? Math.round((paidSoFar / startDebt) * 100) : 100);
+          return (
+            <div className="milestone-row">
+              <div className="ms-name">
+                <strong>Debt free</strong>
+                <span>{fmt(Math.round(startDebt))} @ {debtInterestRate.toFixed(1)}% interest &middot; {fmt(debtPaymentMonthly, { zero:'$0' })}/mo payment</span>
+              </div>
+              <div className="ms-eta">
+                {eta == null ? '—' : formatEta(eta)}
+                {eta != null && eta > 0 && <span className="unit">to reach</span>}
+              </div>
+              <div className="ms-pct">{p}% paid by yr {years}</div>
+            </div>
+          );
+        })()}
 
         {customMilestones.length > 0 && (
           <div style={{ borderTop:'1px solid var(--line)', marginTop:12, paddingTop:4 }}>
@@ -1155,11 +1307,11 @@ function abbrev(n) {
   return '$' + Math.round(n);
 }
 
-function Slider({ label, value, min, max, step, format, onChange, ends }) {
+function Slider({ label, value, min, max, step, format, onChange, ends, compact }) {
   return (
-    <div className="control">
+    <div className="control" style={compact ? { padding:'9px 14px' } : undefined}>
       <div className="lbl">{label}</div>
-      <div className="val">{format(value)}</div>
+      <div className="val" style={compact ? { fontSize:20, marginBottom:6 } : undefined}>{format(value)}</div>
       <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(parseFloat(e.target.value))} />
       <div className="ends"><span>{ends[0]}</span><span>{ends[1]}</span></div>
     </div>

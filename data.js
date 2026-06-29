@@ -14,6 +14,8 @@ const STARTER_DATA = {
   name: 'Me',
   beginningCash:     10000,
   beginningLongTerm: 0,
+  beginningDebt:     0,
+  debtInterestRate:  0,
   planCashYield:     4,
   planLtYield:       7,
   customMilestones:  [],
@@ -90,6 +92,11 @@ function isLtSavings(name) {
   return /long.?term|retirement/i.test(name || '');
 }
 
+/* Debt payment helper — categories with "debt" or "interest" in name */
+function isDebtPayment(name) {
+  return /debt|interest/i.test(name || '');
+}
+
 /* --- Number helpers --- */
 
 function sum(arr) { return arr.reduce((a, b) => a + (+b || 0), 0); }
@@ -123,10 +130,12 @@ function migrateData(d) {
   if (d.beginningCash == null) {
     d.beginningCash = d.beginningBalance != null ? +d.beginningBalance : 0;
   }
-  if (d.beginningLongTerm == null) d.beginningLongTerm = 0;
-  if (d.planCashYield == null)     d.planCashYield = 4;
-  if (d.planLtYield == null)       d.planLtYield = 7;
-  if (!d.customMilestones)         d.customMilestones = [];
+  if (d.beginningLongTerm == null)  d.beginningLongTerm = 0;
+  if (d.beginningDebt == null)      d.beginningDebt = 0;
+  if (d.debtInterestRate == null)   d.debtInterestRate = 0;
+  if (d.planCashYield == null)      d.planCashYield = 4;
+  if (d.planLtYield == null)        d.planLtYield = 7;
+  if (!d.customMilestones)          d.customMilestones = [];
   return d;
 }
 
@@ -134,5 +143,5 @@ Object.assign(window, {
   MONTHS, MONTHS_LONG, arr12,
   STARTER_DATA, BUCKETS, BUCKET_ORDER, BUCKET_CYCLE,
   sum, fmt, fmtAccurate, pct, pct1, uid, migrateData,
-  isLtSavings,
+  isLtSavings, isDebtPayment,
 });
