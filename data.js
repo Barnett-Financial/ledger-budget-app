@@ -136,6 +136,7 @@ function migrateData(d) {
   if (d.planCashYield == null)      d.planCashYield = 4;
   if (d.planLtYield == null)        d.planLtYield = 7;
   if (!d.customMilestones)          d.customMilestones = [];
+  if (d.planProjection === undefined) d.planProjection = null;
   return d;
 }
 
