@@ -8,7 +8,7 @@
   --surface:   #FFFFFF;
   --ink:       #1C1814;
   --ink-soft:  #4A4238;
-  --muted:     #8C8275;
+  --muted:     #6B6153; /* darkened from #8C8275 to clear WCAG AA on --bg */
   --line:      #E8DFCE;
   --line-soft: #F0E9DA;
 
@@ -902,7 +902,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   -webkit-appearance: none;
   appearance: none;
   padding-right: 24px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238C8275' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236B6153' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
 }
@@ -915,4 +915,149 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   font-size: 12px;
   display: flex; justify-content: space-between;
   font-variant-numeric: tabular-nums;
+}
+
+/* ==================================================================
+   Ledger UX revisions — 2026-07-03
+   (1) mobile breakpoint  (2) frozen Category/Annual columns
+   (3) mobile bottom nav + FAB + Data menu  (5) mobile month chips
+   ================================================================== */
+
+/* ---- (2) Freeze Category (left) & Annual (right) while months scroll ----
+   Every sheet .row renders the same 4 corner cells:
+   [dot] [category] …months… [annual] [trailing].  We pin the first two
+   (left) and last two (right); month cells scroll between them.
+   background:inherit picks up each row's own colour (incl. :hover). */
+.row { background: var(--surface); }
+.sheet-scroll .row > *:nth-child(1),
+.sheet-scroll .row > *:nth-child(2),
+.sheet-scroll .row > *:nth-last-child(1),
+.sheet-scroll .row > *:nth-last-child(2) {
+  position: sticky;
+  z-index: 3;
+  background: inherit;
+}
+.sheet-scroll .row > *:nth-child(1)      { left: 0; }
+.sheet-scroll .row > *:nth-child(2)      { left: 28px; border-right: 1px solid var(--line); }
+.sheet-scroll .row > *:nth-last-child(2) { right: 28px; border-left: 1px solid var(--line); }
+.sheet-scroll .row > *:nth-last-child(1) { right: 0; }
+
+/* ---- (3) Mobile bottom nav + FAB + Data menu (hidden on desktop) ---- */
+.desktop-data-actions { display: contents; }
+.bottom-nav { display: none; }
+.fab { display: none; }
+
+.data-menu-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(28,24,20,0.4);
+  display: flex; align-items: flex-end;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.data-menu {
+  width: 100%;
+  background: var(--surface);
+  border-top-left-radius: var(--r-lg);
+  border-top-right-radius: var(--r-lg);
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.18);
+}
+.data-menu .dm-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 4px 4px;
+}
+.data-menu .dm-head h4 {
+  margin: 0; font-family: var(--serif); font-weight: 400; font-size: 20px;
+}
+.data-menu button.dm-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 15px 12px; border-radius: var(--r-sm);
+  font-size: 15px; color: var(--ink);
+  border-bottom: 1px solid var(--line-soft);
+}
+.data-menu button.dm-item:last-child { border-bottom: 0; }
+.data-menu button.dm-item:active { background: var(--bg-soft); }
+.data-menu button.dm-item .dm-ico { width: 20px; text-align: center; color: var(--muted); }
+
+/* ---- (5) Mobile month-switcher chips (hidden on desktop) ---- */
+.month-chips { display: none; }
+
+/* ================= (1) Mobile breakpoint ================= */
+@media (max-width: 720px) {
+  /* header wraps; tighter gutters */
+  .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 16px; }
+  .nav { display: none; }                 /* replaced by bottom tab bar */
+  .main { padding: 20px 16px 96px; }      /* clearance for bottom nav */
+
+  .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .page-head h1 { font-size: 32px; }
+  .page-head .actions { width: 100%; }
+
+  /* KPIs 2×2 */
+  .kpis, .kpis.kpis-5 { grid-template-columns: repeat(2, 1fr); }
+
+  /* collapse two-column grids to one */
+  .track-grid, .plan-grid, .cat-grid { grid-template-columns: 1fr; }
+  .alloc-legend { grid-template-columns: repeat(2, 1fr); }
+  .alloc-rules  { grid-template-columns: 1fr; }
+  .month-summary { position: static; }    /* don't pin on mobile */
+
+  /* (3) swap desktop data actions for bottom nav + fab */
+  .desktop-data-actions { display: none; }
+
+  .bottom-nav {
+    display: flex;
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 50;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  }
+  .bottom-nav button {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 0;
+    font-size: 11px;
+    color: var(--muted);
+    border-radius: var(--r-sm);
+  }
+  .bottom-nav button svg { width: 20px; height: 20px; }
+  .bottom-nav button.active { color: var(--accent); }
+
+  .fab {
+    display: grid; place-items: center;
+    position: fixed; right: 18px; bottom: 76px;
+    z-index: 51;
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: var(--accent); color: var(--bg);
+    font-size: 30px; line-height: 1; font-family: var(--sans);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.22);
+  }
+  .fab:active { transform: scale(0.94); }
+
+  /* (5) show month chips, hide desktop column-mode control */
+  .sheet-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .sheet-toolbar .right { display: none; }
+  .month-chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin: 2px 0 12px;
+  }
+  .month-chips button {
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .month-chips button.active {
+    background: var(--ink); color: var(--bg); border-color: var(--ink);
+  }
+
+  /* keep frozen columns aligned to the narrower mobile grid (22px corners) */
+  .sheet-scroll .row > *:nth-child(2)      { left: 22px; }
+  .sheet-scroll .row > *:nth-last-child(2) { right: 22px; }
 }

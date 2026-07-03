@@ -74,6 +74,21 @@ function BudgetScreen({ data, setData }) {
   const [showInstructions,   setShowInstructions]   = React.useState(false);
   const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
   const [settingsRow,        setSettingsRow]        = React.useState(null);
+  /* Fix #5: phones use a month-switcher instead of a 12-column scroll */
+  const [isMobile,           setIsMobile]           = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches);
+  const [mobileAnnual,       setMobileAnnual]       = React.useState(false);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)');
+    const onChange = e => setIsMobile(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else mq.addListener(onChange);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else mq.removeListener(onChange);
+    };
+  }, []);
 
   const incomeMonthly = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m])));
   const incomeAnnual  = sum(incomeMonthly);
@@ -152,10 +167,11 @@ function BudgetScreen({ data, setData }) {
   const effectiveSaveAnnual = bucketAnnual.save + netAnnual + retHsaAnnual;
 
   const visibleMonths = React.useMemo(() => {
+    if (isMobile)              return mobileAnnual ? [] : [focusMonth];
     if (colMode === 'all')     return MONTHS.map((_, i) => i);
     if (colMode === 'quarter') { const q = Math.floor(focusMonth / 3); return [q*3, q*3+1, q*3+2]; }
     return [focusMonth];
-  }, [colMode, focusMonth]);
+  }, [isMobile, mobileAnnual, colMode, focusMonth]);
 
   const setIncomeCell      = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
   const setCatCell         = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
@@ -311,10 +327,20 @@ function BudgetScreen({ data, setData }) {
         </div>
       </div>
 
+      <div className="month-chips">
+        {MONTHS.map((mo, i) => (
+          <button key={i}
+            className={(!mobileAnnual && focusMonth === i) ? 'active' : ''}
+            onClick={() => { setMobileAnnual(false); setFocusMonth(i); }}>{mo}</button>
+        ))}
+        <button className={mobileAnnual ? 'active' : ''}
+          onClick={() => setMobileAnnual(true)}>Annual</button>
+      </div>
+
       <div className="sheet-wrap">
         <div className="sheet-scroll">
           <Sheet
-            visibleMonths={visibleMonths} data={data}
+            visibleMonths={visibleMonths} data={data} isMobile={isMobile}
             incomeMonthly={incomeMonthly} incomeAnnual={incomeAnnual}
             groupTotals={groupTotals}
             disbursementsMonthly={disbursementsMonthly} disbursementsAnnual={disbursementsAnnual}
@@ -377,7 +403,7 @@ function BudgetScreen({ data, setData }) {
 
 function Sheet(props) {
   const {
-    visibleMonths, data,
+    visibleMonths, data, isMobile,
     incomeMonthly, incomeAnnual, groupTotals,
     disbursementsMonthly, disbursementsAnnual,
     netMonthly, netAnnual,
@@ -390,7 +416,10 @@ function Sheet(props) {
   } = props;
 
   const n  = visibleMonths.length;
-  const ct = '28px 224px repeat(' + n + ', minmax(70px, 1fr)) 92px 28px';
+  const monthCols = n > 0 ? 'repeat(' + n + ', minmax(64px, 1fr)) ' : '';
+  const ct = isMobile
+    ? '22px minmax(112px, 1fr) ' + monthCols + '84px 22px'
+    : '28px 224px repeat(' + n + ', minmax(70px, 1fr)) 92px 28px';
   const rs = { gridTemplateColumns: ct };
 
   return (
@@ -804,10 +833,15 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
 
   <script type="text/babel">
 /* ---- TrackScreen ---- */
-function TrackScreen({ data, setData, monthIdx, setMonthIdx }) {
+function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogHandled }) {
   const [showModal,        setShowModal]        = React.useState(false);
   const [showTransactions, setShowTransactions] = React.useState(false);
   const [defaultCatId,     setDefaultCatId]     = React.useState(null);
+
+  /* Fix #3: open the Log-expense modal when the mobile FAB routes here */
+  React.useEffect(() => {
+    if (autoLog) { setShowModal(true); if (onAutoLogHandled) onAutoLogHandled(); }
+  }, [autoLog]);
 
   const monthTxs = data.transactions.filter(t => {
     const d = new Date(t.date + 'T00:00:00');
@@ -1606,6 +1640,8 @@ function ProjectionChart({ series, years }) {
 function App() {
   const [screen,   setScreen]   = React.useState('budget');
   const [monthIdx, setMonthIdx] = React.useState(Math.min(new Date().getMonth(), 11));
+  const [showDataMenu,      setShowDataMenu]      = React.useState(false);   // Fix #3
+  const [pendingLogExpense, setPendingLogExpense] = React.useState(false);   // Fix #3 (FAB)
   const [data,     setData]     = React.useState(() => {
     try {
       const raw = localStorage.getItem('ledger.data.v2');
@@ -1667,22 +1703,64 @@ function App() {
             <span>{data.year}</span>
             <button onClick={() => setData(d => ({ ...d, year: d.year + 1 }))} aria-label="Next year">›</button>
           </div>
-          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
-          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
-          <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
+          <div className="desktop-data-actions">
+            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
+            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
+            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
+          </div>
           <div className="avatar" title={data.name || 'Me'}>{initials}</div>
         </div>
       </header>
       <main className="main">
         {screen === 'budget' && <BudgetScreen data={data} setData={setData} />}
-        {screen === 'track'  && <TrackScreen  data={data} setData={setData} monthIdx={monthIdx} setMonthIdx={setMonthIdx} />}
+        {screen === 'track'  && <TrackScreen  data={data} setData={setData} monthIdx={monthIdx} setMonthIdx={setMonthIdx}
+                                    autoLog={pendingLogExpense} onAutoLogHandled={() => setPendingLogExpense(false)} />}
         {screen === 'plan'   && <PlanScreen   data={data} setData={setData} />}
       </main>
+
+      {/* Fix #3 — mobile bottom tab bar (hidden on desktop via CSS) */}
+      <nav className="bottom-nav">
+        <button className={screen === 'budget' ? 'active' : ''} onClick={() => setScreen('budget')}>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="4" width="14" height="12" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="9" y1="8" x2="9" y2="16"/></svg>
+          <span>Budget</span>
+        </button>
+        <button className={screen === 'track' ? 'active' : ''} onClick={() => setScreen('track')}>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="10" cy="10" r="7"/><line x1="10" y1="10" x2="10" y2="3.5"/><line x1="10" y1="10" x2="15.4" y2="13.2"/></svg>
+          <span>Track</span>
+        </button>
+        <button className={screen === 'plan' ? 'active' : ''} onClick={() => setScreen('plan')}>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,14 8,9 12,12 17,5"/><line x1="3" y1="17" x2="17" y2="17"/></svg>
+          <span>Plan</span>
+        </button>
+        <button onClick={() => setShowDataMenu(true)}>
+          <svg viewBox="0 0 20 20" fill="currentColor" stroke="none"><circle cx="5" cy="10" r="1.5"/><circle cx="10" cy="10" r="1.5"/><circle cx="15" cy="10" r="1.5"/></svg>
+          <span>More</span>
+        </button>
+      </nav>
+
+      {/* Fix #3 — mobile FAB for Log expense (hidden on desktop via CSS) */}
+      <button className="fab" aria-label="Log expense" title="Log expense"
+        onClick={() => { setScreen('track'); setPendingLogExpense(true); }}>+</button>
+
+      {/* Fix #3 — Data / More menu (Export / Import / Reset) */}
+      {showDataMenu && (
+        <div className="data-menu-overlay" onClick={() => setShowDataMenu(false)}>
+          <div className="data-menu" onClick={e => e.stopPropagation()}>
+            <div className="dm-head">
+              <h4>Data</h4>
+              <button className="modal-close" onClick={() => setShowDataMenu(false)} aria-label="Close">&#215;</button>
+            </div>
+            <button className="dm-item" onClick={() => { setShowDataMenu(false); exportData(); }}><span className="dm-ico">&#8595;</span>Export data (.json)</button>
+            <button className="dm-item" onClick={() => { setShowDataMenu(false); importData(); }}><span className="dm-ico">&#8593;</span>Import data (.json)</button>
+            <button className="dm-item" onClick={() => { setShowDataMenu(false); resetData(); }}><span className="dm-ico">&#8635;</span>Reset to starter data</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App />); /* mount v2026-07-03 */
   </script>
 </body>
 </html>
