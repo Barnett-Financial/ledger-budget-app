@@ -353,8 +353,10 @@ function BudgetScreen({ data, setData }) {
             {BUCKET_ORDER.map(b => (
               <div key={b} className="item"><span className={'dot ' + b}></span>{BUCKETS[b].label}</div>
             ))}
-            <div className="item" style={{ cursor:'help' }}
-              title="Every category is tagged Needs, Wants, Saving, or Giving. Click the colored dot on a row to change its bucket — the allocation bar and the rule-of-thumb checks above use these tags.">&#9432;</div>
+            <div className="item">
+              <Info label="About buckets"
+                text="Every category is tagged Needs, Wants, Saving, or Giving. Tap the colored dot on a row to change its bucket — the allocation bar and the rule-of-thumb checks above use these tags." />
+            </div>
           </div>
         </div>
         <div className="right">
@@ -489,8 +491,8 @@ function Sheet(props) {
         <div className="name" style={{ fontSize:12.5 }}>
           Beginning Cash Savings
           <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planCashYield||0).toFixed(1)}% yield</span>
-          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
-            title="Your cash/savings balance on Jan 1. Editable in January only — later months are computed, compounding at the Cash Yield from the Plan tab, plus cash-savings categories each month.">&#9432;</span>
+          <Info label="About beginning cash"
+            text="Your cash/savings balance on Jan 1. Editable in January only — later months are computed, compounding at the Cash Yield from the Plan tab, plus cash-savings categories each month." />
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month">
@@ -505,8 +507,8 @@ function Sheet(props) {
         <div className="name" style={{ fontSize:12.5 }}>
           Beginning Long-term Invest
           <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planLtYield||0).toFixed(1)}% yield</span>
-          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
-            title="Your long-term investment balance on Jan 1. Editable in January only — later months compound at the Long-term Yield, plus retirement/long-term categories and any pretax 401(k)/HSA each month.">&#9432;</span>
+          <Info label="About beginning long-term balance"
+            text="Your long-term investment balance on Jan 1. Editable in January only — later months compound at the Long-term Yield, plus retirement/long-term categories and any pretax 401(k)/HSA each month." />
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month">
@@ -526,8 +528,8 @@ function Sheet(props) {
             style={{ marginLeft:6, fontSize:10.5, color:'var(--warn)', background:'rgba(200,54,43,0.08)', border:'1px solid rgba(200,54,43,0.25)', borderRadius:4, padding:'1px 7px', cursor:'pointer', fontFamily:'var(--mono)' }}>
             {(debtInterestRate||0).toFixed(1)}% rate
           </button>
-          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
-            title="Your debt balance on Jan 1. Categories that count as debt payments reduce it each month; interest accrues at the rate on the button. Set a category to “Debt payment” in its ⚙ settings if the name isn’t obvious.">&#9432;</span>
+          <Info label="About beginning debt"
+            text="Your debt balance on Jan 1. Categories that count as debt payments reduce it each month; interest accrues at the rate on the button. Set a category to “Debt payment” in its ⚙ settings if the name isn’t obvious." />
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month" style={{ color:'var(--warn)' }}>
@@ -576,8 +578,8 @@ function Sheet(props) {
           <div></div>
           <div className="name" style={{ fontSize:12.5, color:'var(--muted)' }}>
             Pretax payroll deductions
-            <span title="401(k), HSA, premiums and other pretax amounts withheld before take-home pay. Read-only — edit these on an income row's ⚙ settings."
-              style={{ marginLeft:6, color:'var(--muted)', cursor:'help', fontSize:11 }}>&#9432;</span>
+            <Info label="About pretax deductions"
+              text="401(k), HSA, premiums and other pretax amounts withheld before take-home pay. Read-only — edit these on an income row's ⚙ settings." />
           </div>
           {visibleMonths.map(m => (
             <div key={m} className="num month" style={{ color:'var(--muted)' }}>{fmt(deductionMonthly[m], { zero:'—' })}</div>
@@ -769,6 +771,45 @@ function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
       <div className="val">{text}</div>
       {tone && <div className={'delta ' + tone}>{tone === 'pos' ? 'positive savings' : 'over budget'}</div>}
     </div>
+  );
+}
+
+/* 2026-07-09 mobile-fit: tap/hover ⓘ tooltip. title= attributes never show on
+   touch devices, so instructional hints were invisible on iPhone. The popover
+   is position:fixed with JS coords so sheet overflow/sticky columns can't clip it. */
+function Info({ text, label }) {
+  const [pos, setPos] = React.useState(null);
+  const ref = React.useRef(null);
+  const show = () => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const w = Math.min(260, window.innerWidth - 24);
+    let x = r.left + r.width / 2 - w / 2;
+    x = Math.max(12, Math.min(x, window.innerWidth - w - 12));
+    setPos({ x, y: r.bottom + 6, w });
+  };
+  React.useEffect(() => {
+    if (!pos) return;
+    const close = () => setPos(null);
+    document.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [pos]);
+  const toggle = (e) => { e.stopPropagation(); e.preventDefault(); pos ? setPos(null) : show(); };
+  return (
+    <span ref={ref} className={'info-tip' + (pos ? ' open' : '')}
+      role="button" tabIndex={0} aria-label={label || 'More info'}
+      onClick={toggle}
+      onMouseEnter={show} onMouseLeave={() => setPos(null)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggle(e); }}>
+      &#9432;
+      {pos && <span className="info-pop" style={{ position:'fixed', left:pos.x, top:pos.y, width:pos.w }}>{text}</span>}
+    </span>
   );
 }
 
@@ -1913,7 +1954,7 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />); /* mount v2026-07-03 */
+ReactDOM.createRoot(document.getElementById('root')).render(<App />); /* mount v2026-07-09 mobile-fit */
   </script>
 </body>
 </html>
