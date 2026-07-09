@@ -74,13 +74,19 @@ function BudgetScreen({ data, setData }) {
   const [showInstructions,   setShowInstructions]   = React.useState(false);
   const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
   const [settingsRow,        setSettingsRow]        = React.useState(null);
+  /* Fix 2.3: pulse the ⚙ gear on first mobile run so it's discoverable */
+  const [gearHint,           setGearHint]           = React.useState(
+    () => { try { return !localStorage.getItem('ledger.seen.gear'); } catch (_) { return false; } });
+  React.useEffect(() => {
+    if (settingsRow && gearHint) { setGearHint(false); try { localStorage.setItem('ledger.seen.gear', '1'); } catch (_) {} }
+  }, [settingsRow]);
   /* Fix #5: phones use a month-switcher instead of a 12-column scroll */
   const [isMobile,           setIsMobile]           = React.useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches);
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
   const [mobileAnnual,       setMobileAnnual]       = React.useState(false);
 
   React.useEffect(() => {
-    const mq = window.matchMedia('(max-width: 720px)');
+    const mq = window.matchMedia('(max-width: 768px)');
     const onChange = e => setIsMobile(e.matches);
     if (mq.addEventListener) mq.addEventListener('change', onChange);
     else mq.addListener(onChange);
@@ -93,15 +99,22 @@ function BudgetScreen({ data, setData }) {
   const incomeMonthly = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m])));
   const incomeAnnual  = sum(incomeMonthly);
 
-  /* Fix #6: pretax payroll deductions per income source (monthly amounts) */
+  /* Fix 5.1: pretax payroll deductions per income source (monthly amounts).
+     Annualized correctly — a deduction only counts in a month where that
+     income row actually pays out (take-home > 0), never a flat ×12. */
   const pdFields  = (r) => r.payrollDeductions || {};
   const pdSum     = (r) => { const p = pdFields(r); return (+p.retirement401k||0) + (+p.hsa||0) + (+p.pretaxPremiums||0) + (+p.otherPretax||0); };
   const pdRetHsa  = (r) => { const p = pdFields(r); return (+p.retirement401k||0) + (+p.hsa||0); };
+  const pdOther   = (r) => { const p = pdFields(r); return (+p.pretaxPremiums||0) + (+p.otherPretax||0); };
   const payrollActive        = data.income.some(r => pdSum(r) > 0);
-  const deductionMonthlyTotal = sum(data.income.map(pdSum));
-  const retHsaMonthly         = sum(data.income.map(pdRetHsa));   /* 401k + HSA feed LT savings */
-  const grossIncomeAnnual     = incomeAnnual + deductionMonthlyTotal * 12;
-  const retHsaAnnual          = retHsaMonthly * 12;
+  const deductionMonthly     = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m] > 0 ? pdSum(r)    : 0)));
+  const retHsaMonthlyArr     = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m] > 0 ? pdRetHsa(r) : 0)));
+  const otherDeductMonthly   = MONTHS.map((_, m) => sum(data.income.map(r => r.monthly[m] > 0 ? pdOther(r)  : 0)));
+  const deductionAnnual      = sum(deductionMonthly);
+  const retHsaAnnual         = sum(retHsaMonthlyArr);   /* 401k + HSA feed LT savings */
+  const otherDeductAnnual    = sum(otherDeductMonthly);
+  const grossReceiptsMonthly = MONTHS.map((_, m) => incomeMonthly[m] + deductionMonthly[m]);
+  const grossIncomeAnnual    = incomeAnnual + deductionAnnual;
 
   const groupTotals = data.groups.map(g => {
     const monthly = MONTHS.map((_, m) => sum(g.cats.map(c => c.monthly[m])));
@@ -113,27 +126,29 @@ function BudgetScreen({ data, setData }) {
   const netMonthly = MONTHS.map((_, m) => incomeMonthly[m] - disbursementsMonthly[m]);
   const netAnnual  = sum(netMonthly);
 
+  /* Fix 3.1: routing honors a category's explicit "Counts as" override (c.flow)
+     first, falling back to the name regex only when set to Auto. */
   const cashSavingsMonthly = MONTHS.map((_, m) => {
     let s = 0;
     data.groups.forEach(g => g.cats.forEach(c => {
-      if (c.bucket === 'save' && !isLtSavings(c.name)) s += c.monthly[m];
+      if (c.bucket === 'save' && !catIsLtSavings(c) && !catIsDebtPayment(c)) s += c.monthly[m];
     }));
     return s;
   });
   const ltSavingsMonthly = MONTHS.map((_, m) => {
     let s = 0;
     data.groups.forEach(g => g.cats.forEach(c => {
-      if (c.bucket === 'save' && isLtSavings(c.name)) s += c.monthly[m];
+      if (c.bucket === 'save' && catIsLtSavings(c) && !catIsDebtPayment(c)) s += c.monthly[m];
     }));
-    /* Fix #6: pretax 401k + HSA compound into the Long-term Invest balance */
-    return s + retHsaMonthly;
+    /* Fix 5.1: pretax 401k + HSA compound into Long-term Invest, month-gated */
+    return s + retHsaMonthlyArr[m];
   });
 
-  /* Debt payments = any category with "debt" or "interest" in name */
+  /* Debt payments = explicit "Debt payment" flow, or name with "debt"/"interest" */
   const debtPaymentsMonthly = MONTHS.map((_, m) => {
     let s = 0;
     data.groups.forEach(g => g.cats.forEach(c => {
-      if (isDebtPayment(c.name)) s += (c.monthly[m] || 0);
+      if (catIsDebtPayment(c)) s += (c.monthly[m] || 0);
     }));
     return s;
   });
@@ -147,7 +162,9 @@ function BudgetScreen({ data, setData }) {
   let debtBal = +data.beginningDebt     || 0;
   MONTHS.forEach((_, m) => {
     beginCash.push(cashBal); beginLT.push(ltBal); beginDebt.push(debtBal);
-    cashBal = cashBal * (1 + cashRate) + cashSavingsMonthly[m];
+    /* Fix 5.2: unallocated net income lands in cash (over-allocation drags it
+       down), so end balances reconcile with the "Annual savings" KPI. */
+    cashBal = cashBal * (1 + cashRate) + cashSavingsMonthly[m] + netMonthly[m];
     ltBal   = ltBal   * (1 + ltRate)   + ltSavingsMonthly[m];
     debtBal = Math.max(0, debtBal * (1 + debtRate) - debtPaymentsMonthly[m]);
     endCash.push(cashBal); endLT.push(ltBal); endDebt.push(debtBal);
@@ -165,6 +182,13 @@ function BudgetScreen({ data, setData }) {
   /* Fix #2: any under-allocation (net) flows into savings; over-allocation reduces it.
      Fix #6: pretax 401k + HSA also count toward annual savings. */
   const effectiveSaveAnnual = bucketAnnual.save + netAnnual + retHsaAnnual;
+
+  /* Fix 5.1: warn if a payroll deduction duplicates an existing budget category
+     (the starter data ships a 'Retirement (401k)' category — a real double-count trap). */
+  const deductionCatMatches = [];
+  data.groups.forEach(g => g.cats.forEach(c => {
+    if (/401k|403b|retirement|hsa/i.test(c.name || '')) deductionCatMatches.push({ name: c.name, monthlyAvg: sum(c.monthly) / 12 });
+  }));
 
   const visibleMonths = React.useMemo(() => {
     if (isMobile)              return mobileAnnual ? [] : [focusMonth];
@@ -214,6 +238,14 @@ function BudgetScreen({ data, setData }) {
         try {
           const rows = parseCSV(ev.target.result);
           const monthCols = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          /* Fix 2.1: the CSV has no columns for row settings, so preserve them for
+             any imported row whose name matches an existing one (case-insensitive). */
+          const incSettings = {};
+          data.income.forEach(r => { incSettings[(r.name || '').trim().toLowerCase()] = { fillMode: r.fillMode, payrollDeductions: r.payrollDeductions }; });
+          const catSettings = {};
+          data.groups.forEach(g => g.cats.forEach(c => { catSettings[(c.name || '').trim().toLowerCase()] = { fillMode: c.fillMode, isFund: c.isFund, flow: c.flow }; }));
+          const clean = (o) => { const out = {}; Object.keys(o).forEach(k => { if (o[k] !== undefined) out[k] = o[k]; }); return out; };
+
           const income = []; const groupMap = {}; const groupOrder = [];
           rows.forEach(row => {
             const type   = (row['Type'] || '').toLowerCase().trim();
@@ -223,17 +255,17 @@ function BudgetScreen({ data, setData }) {
             const monthly = monthCols.map(m => parseFloat(row[m] || 0) || 0);
             if (!name) return;
             if (type === 'income') {
-              income.push({ id: 'inc_' + uid(), name, monthly });
+              income.push({ id: 'inc_' + uid(), name, monthly, ...clean(incSettings[name.toLowerCase()] || {}) });
             } else {
               if (!groupMap[group]) { groupMap[group] = { id: 'g_' + uid(), name: group, cats: [] }; groupOrder.push(group); }
               const validBucket = ['needs','wants','save','give'].includes(bucket) ? bucket : 'needs';
-              groupMap[group].cats.push({ id: 'c_' + uid(), name, bucket: validBucket, monthly });
+              groupMap[group].cats.push({ id: 'c_' + uid(), name, bucket: validBucket, monthly, ...clean(catSettings[name.toLowerCase()] || {}) });
             }
           });
           const nInc = income.length, nGrp = groupOrder.length;
           const nCat = groupOrder.reduce((a, g) => a + groupMap[g].cats.length, 0);
           if (nInc === 0 && nCat === 0) { alert('No budget data found. Check the CSV format.'); return; }
-          if (confirm('Found ' + nInc + ' income source' + (nInc !== 1 ? 's' : '') + ' and ' + nCat + ' categor' + (nCat !== 1 ? 'ies' : 'y') + '. Replace current budget?')) {
+          if (confirm('Found ' + nInc + ' income source' + (nInc !== 1 ? 's' : '') + ' and ' + nCat + ' categor' + (nCat !== 1 ? 'ies' : 'y') + '. Replace current budget?\n\nRow settings (payroll deductions, Fund, fill mode, "counts as") are kept only for rows whose name matches an existing one; any others reset.')) {
             setData(prev => ({ ...prev, income: nInc > 0 ? income : prev.income, groups: nGrp > 0 ? groupOrder.map(g => groupMap[g]) : prev.groups }));
           }
         } catch (_) { alert('Could not parse the CSV.'); }
@@ -249,6 +281,19 @@ function BudgetScreen({ data, setData }) {
     a.download = 'ledger-budget-template.csv'; a.click(); URL.revokeObjectURL(a.href);
   };
 
+  /* Fix 2.1: export the current budget in the same CSV shape as the template,
+     so it round-trips (edit in a spreadsheet, re-import; matching names keep settings). */
+  const exportBudgetCSV = () => {
+    const monthCols = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const esc = (v) => { v = String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    const lines = [['Type','Group','Name','Bucket', ...monthCols].join(',')];
+    data.income.forEach(r => { lines.push(['Income', '', r.name, '', ...r.monthly.map(n => Math.round(n * 100) / 100)].map(esc).join(',')); });
+    data.groups.forEach(g => g.cats.forEach(c => { lines.push(['Disbursement', g.name, c.name, c.bucket, ...c.monthly.map(n => Math.round(n * 100) / 100)].map(esc).join(',')); }));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'ledger-budget-' + data.year + '.csv'; a.click(); URL.revokeObjectURL(a.href);
+  };
+
   return (
     <div>
       <div className="page-head">
@@ -258,6 +303,7 @@ function BudgetScreen({ data, setData }) {
         </div>
         <div className="actions">
           <button className="btn ghost" onClick={downloadCSVTemplate}>CSV template</button>
+          <button className="btn ghost" onClick={exportBudgetCSV}>Export budget (CSV)</button>
           <button className="btn ghost" onClick={importCSV}>Upload CSV</button>
           <button className="btn ghost" onClick={copyJan}>Fill across from Jan</button>
           <button className="btn primary" onClick={handleSave}>{saved ? 'Saved ✓' : 'Save budget'}</button>
@@ -267,7 +313,7 @@ function BudgetScreen({ data, setData }) {
       <div style={{ marginBottom:20, border:'1px solid var(--line)', borderRadius:'var(--r-md)', background:'var(--surface)', overflow:'hidden' }}>
         <button style={{ width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center', padding:'11px 18px', fontWeight:500, fontSize:13.5, textAlign:'left' }}
           onClick={() => setShowInstructions(v => !v)}>
-          <span>Instructions</span>
+          <span>Key notes</span>
           <span style={{ color:'var(--muted)', fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>{showInstructions ? '▲ Hide' : '▼ Show'}</span>
         </button>
         {showInstructions && (
@@ -285,11 +331,12 @@ function BudgetScreen({ data, setData }) {
       </div>
 
       <div className={'kpis' + (payrollActive ? ' kpis-5' : '')}>
-        <Kpi label="Annual income"         value={incomeAnnual} />
+        <Kpi label={payrollActive ? 'Take-home income' : 'Annual income'} value={incomeAnnual} />
         {payrollActive && <Kpi label="Gross income" value={grossIncomeAnnual} />}
         <Kpi label="Annual outflow"        value={disbursementsAnnual} />
         <Kpi label="Annual savings"        value={effectiveSaveAnnual} tone={effectiveSaveAnnual > 0 ? 'pos' : undefined} />
-        <Kpi label="Year-end total wealth" value={Math.round(endCash[11] + endLT[11])} />
+        <Kpi label={(+data.beginningDebt || 0) > 0 ? 'Year-end net position' : 'Year-end total wealth'}
+             value={Math.round(endCash[11] + endLT[11] - endDebt[11])} />
       </div>
 
       <AllocationSummary
@@ -297,7 +344,7 @@ function BudgetScreen({ data, setData }) {
         incomeAnnual={incomeAnnual} incomeMonthlyAvg={incomeAnnual / 12}
         groupTotals={groupTotals} groups={data.groups}
         netAnnual={netAnnual} grossIncomeAnnual={grossIncomeAnnual}
-        retHsaAnnual={retHsaAnnual} payrollActive={payrollActive}
+        retHsaAnnual={retHsaAnnual} otherDeductAnnual={otherDeductAnnual} payrollActive={payrollActive}
       />
 
       <div className="sheet-toolbar">
@@ -306,6 +353,8 @@ function BudgetScreen({ data, setData }) {
             {BUCKET_ORDER.map(b => (
               <div key={b} className="item"><span className={'dot ' + b}></span>{BUCKETS[b].label}</div>
             ))}
+            <div className="item" style={{ cursor:'help' }}
+              title="Every category is tagged Needs, Wants, Saving, or Giving. Click the colored dot on a row to change its bucket — the allocation bar and the rule-of-thumb checks above use these tags.">&#9432;</div>
           </div>
         </div>
         <div className="right">
@@ -337,11 +386,14 @@ function BudgetScreen({ data, setData }) {
           onClick={() => setMobileAnnual(true)}>Annual</button>
       </div>
 
-      <div className="sheet-wrap">
+      <div className={'sheet-wrap' + (gearHint ? ' gear-hint' : '')}>
         <div className="sheet-scroll">
           <Sheet
             visibleMonths={visibleMonths} data={data} isMobile={isMobile}
             incomeMonthly={incomeMonthly} incomeAnnual={incomeAnnual}
+            payrollActive={payrollActive}
+            deductionMonthly={deductionMonthly} deductionAnnual={deductionAnnual}
+            grossReceiptsMonthly={grossReceiptsMonthly} grossReceiptsAnnual={grossIncomeAnnual}
             groupTotals={groupTotals}
             disbursementsMonthly={disbursementsMonthly} disbursementsAnnual={disbursementsAnnual}
             netMonthly={netMonthly} netAnnual={netAnnual}
@@ -381,6 +433,7 @@ function BudgetScreen({ data, setData }) {
           return (
             <RowSettingsModal
               kind="income" row={row} netMonthlyAvg={sum(row.monthly) / 12}
+              deductionCatMatches={deductionCatMatches}
               onSave={patch => setIncomeSettings(row.id, patch)}
               onClose={() => setSettingsRow(null)}
             />
@@ -405,6 +458,7 @@ function Sheet(props) {
   const {
     visibleMonths, data, isMobile,
     incomeMonthly, incomeAnnual, groupTotals,
+    payrollActive, deductionMonthly, deductionAnnual, grossReceiptsMonthly, grossReceiptsAnnual,
     disbursementsMonthly, disbursementsAnnual,
     netMonthly, netAnnual,
     beginCash, endCash, beginLT, endLT,
@@ -435,6 +489,8 @@ function Sheet(props) {
         <div className="name" style={{ fontSize:12.5 }}>
           Beginning Cash Savings
           <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planCashYield||0).toFixed(1)}% yield</span>
+          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
+            title="Your cash/savings balance on Jan 1. Editable in January only — later months are computed, compounding at the Cash Yield from the Plan tab, plus cash-savings categories each month.">&#9432;</span>
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month">
@@ -449,6 +505,8 @@ function Sheet(props) {
         <div className="name" style={{ fontSize:12.5 }}>
           Beginning Long-term Invest
           <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planLtYield||0).toFixed(1)}% yield</span>
+          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
+            title="Your long-term investment balance on Jan 1. Editable in January only — later months compound at the Long-term Yield, plus retirement/long-term categories and any pretax 401(k)/HSA each month.">&#9432;</span>
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month">
@@ -468,6 +526,8 @@ function Sheet(props) {
             style={{ marginLeft:6, fontSize:10.5, color:'var(--warn)', background:'rgba(200,54,43,0.08)', border:'1px solid rgba(200,54,43,0.25)', borderRadius:4, padding:'1px 7px', cursor:'pointer', fontFamily:'var(--mono)' }}>
             {(debtInterestRate||0).toFixed(1)}% rate
           </button>
+          <span style={{ color:'var(--muted)', marginLeft:6, cursor:'help', fontSize:11 }}
+            title="Your debt balance on Jan 1. Categories that count as debt payments reduce it each month; interest accrues at the rate on the button. Set a category to “Debt payment” in its ⚙ settings if the name isn’t obvious.">&#9432;</span>
         </div>
         {visibleMonths.map(m => (
           <div key={m} className="num month" style={{ color:'var(--warn)' }}>
@@ -492,23 +552,46 @@ function Sheet(props) {
             <input style={{ flex:1, minWidth:0 }} value={row.name} placeholder="Income source" onChange={e => setIncomeName(row.id, e.target.value)} />
             {(row.payrollDeductions && ((+row.payrollDeductions.retirement401k||0)+(+row.payrollDeductions.hsa||0)+(+row.payrollDeductions.pretaxPremiums||0)+(+row.payrollDeductions.otherPretax||0)) > 0) && <span className="row-tag">Pretax</span>}
             {row.fillMode === 'manual' && <span className="row-tag">Manual</span>}
-            <button className="row-gear" title="Income settings — fill mode &amp; payroll deductions" onClick={() => onOpenSettings({ kind:'income', id:row.id })}>&#9881;</button>
+            <button className="row-gear" aria-label="Income settings" title="Income settings — fill mode &amp; payroll deductions" onClick={() => onOpenSettings({ kind:'income', id:row.id })}>&#9881;</button>
           </div>
           {visibleMonths.map(m => (
             <div key={m} className="num month"><NumberInput value={row.monthly[m]} onChange={v => setIncomeCell(row.id, m, v)} /></div>
           ))}
           <div className="num annual">{fmt(sum(row.monthly))}</div>
-          <button className="row-del" onClick={() => delIncome(row.id)}>&#215;</button>
+          <button className="row-del" aria-label="Delete income source" onClick={() => delIncome(row.id)}>&#215;</button>
         </div>
       ))}
 
       <button className="add-row" onClick={addIncome}><span className="plus">+</span><span className="lbl">Add income source</span></button>
 
       <div className="row total" style={rs}>
-        <div></div><div className="name">Total receipts</div>
+        <div></div><div className="name">{payrollActive ? 'Total receipts (take-home)' : 'Total receipts'}</div>
         {visibleMonths.map(m => <div key={m} className="num month">{fmt(incomeMonthly[m])}</div>)}
         <div className="num annual">{fmt(incomeAnnual)}</div><div></div>
       </div>
+
+      {/* Fix 5.1: make pretax dollars visibly flow through the sheet */}
+      {payrollActive && (
+        <div className="row balance" style={rs}>
+          <div></div>
+          <div className="name" style={{ fontSize:12.5, color:'var(--muted)' }}>
+            Pretax payroll deductions
+            <span title="401(k), HSA, premiums and other pretax amounts withheld before take-home pay. Read-only — edit these on an income row's ⚙ settings."
+              style={{ marginLeft:6, color:'var(--muted)', cursor:'help', fontSize:11 }}>&#9432;</span>
+          </div>
+          {visibleMonths.map(m => (
+            <div key={m} className="num month" style={{ color:'var(--muted)' }}>{fmt(deductionMonthly[m], { zero:'—' })}</div>
+          ))}
+          <div className="num annual" style={{ color:'var(--muted)' }}>{fmt(deductionAnnual)}</div><div></div>
+        </div>
+      )}
+      {payrollActive && (
+        <div className="row total" style={rs}>
+          <div></div><div className="name">Gross receipts</div>
+          {visibleMonths.map(m => <div key={m} className="num month">{fmt(grossReceiptsMonthly[m])}</div>)}
+          <div className="num annual">{fmt(grossReceiptsAnnual)}</div><div></div>
+        </div>
+      )}
 
       <div className="row section" style={rs}>
         <div></div><div>Disbursements</div>
@@ -525,7 +608,7 @@ function Sheet(props) {
               <div className="name"><input value={g.name} placeholder="Group name" onChange={e => setGroupName(g.id, e.target.value)} style={{ fontWeight:500 }} /></div>
               {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'-' })}</div>)}
               <div className="num annual">{fmt(gt.annual)}</div>
-              <button className="row-del" onClick={() => delGroup(g.id)}>&#215;</button>
+              <button className="row-del" aria-label="Delete group" onClick={() => delGroup(g.id)}>&#215;</button>
             </div>
 
             {g.cats.map(c => (
@@ -537,15 +620,15 @@ function Sheet(props) {
                 </div>
                 <div className="name" style={{ display:'flex', alignItems:'center', gap:4 }}>
                   <input style={{ flex:1, minWidth:0 }} value={c.name} placeholder="Category" onChange={e => setCatName(g.id, c.id, e.target.value)} />
-                  {c.isFund && <span className="row-tag fund">Fund</span>}
+                  {c.isFund && <span className="row-tag fund" style={{ cursor:'help' }} title="Fund: this category accrues its monthly budget and draws down as you log expenses on the Track tab, showing a running balance instead of resetting each month.">Fund</span>}
                   {c.fillMode === 'manual' && <span className="row-tag">Manual</span>}
-                  <button className="row-gear" title="Category settings — fill mode &amp; fund" onClick={() => onOpenSettings({ kind:'cat', gid:g.id, id:c.id })}>&#9881;</button>
+                  <button className="row-gear" aria-label="Category settings" title="Category settings — fill mode, fund &amp; counts-as" onClick={() => onOpenSettings({ kind:'cat', gid:g.id, id:c.id })}>&#9881;</button>
                 </div>
                 {visibleMonths.map(m => (
                   <div key={m} className="num month"><NumberInput value={c.monthly[m]} onChange={v => setCatCell(g.id, c.id, m, v)} dim /></div>
                 ))}
                 <div className="num annual">{fmt(sum(c.monthly))}</div>
-                <button className="row-del" onClick={() => delCat(g.id, c.id)}>&#215;</button>
+                <button className="row-del" aria-label="Delete category" onClick={() => delCat(g.id, c.id)}>&#215;</button>
               </div>
             ))}
 
@@ -593,30 +676,40 @@ function Sheet(props) {
   );
 }
 
-function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups, netAnnual = 0, grossIncomeAnnual = 0, retHsaAnnual = 0, payrollActive = false }) {
-  const denom      = incomeAnnual || 1;
+function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups, netAnnual = 0, grossIncomeAnnual = 0, retHsaAnnual = 0, otherDeductAnnual = 0, payrollActive = false }) {
+  /* Fix 4.2: when payroll deductions are set, the WHOLE component uses gross as
+     the denominator and shows pretax dollars as their own bar segments, so the
+     bar, legend, and rules all share one baseline (gross). Without deductions
+     it behaves exactly as before (take-home baseline). */
+  const denom      = (payrollActive ? grossIncomeAnnual : incomeAnnual) || 1;
   /* Fix #2: fold net (under/over allocation) into Saving so leftover cash is saved. */
   const saveWithNet = bucketAnnual.save + netAnnual;
   const saveAvg     = saveWithNet / 12;
   const seg        = n => Math.max(0, (n / denom) * 100);
   const showUnalloc = bucketAnnual.unalloc > 0;
+  const showPretax  = payrollActive && retHsaAnnual > 0;
+  const showOther   = payrollActive && otherDeductAnnual > 0;
   const housingGroup = groupTotals.find((gt, i) => groups[i] && groups[i].name.toLowerCase() === 'housing');
   const housingPct   = housingGroup ? housingGroup.annual / denom : 0;
-  /* Fix #6: savings rate uses gross income denominator + pretax 401k/HSA when payroll deductions are set. */
-  const savingsRateDenom = payrollActive ? (grossIncomeAnnual || 1) : denom;
-  const savingsRateNum   = saveWithNet + retHsaAnnual;
-  const savingRate       = savingsRateNum / savingsRateDenom;
-  const givingRate   = bucketAnnual.give / denom;
+  const savingsRateNum = saveWithNet + retHsaAnnual;   /* pretax 401k/HSA count as saving */
+  const savingRate     = savingsRateNum / denom;
+  const givingRate     = bucketAnnual.give / denom;
   return (
     <div className="alloc">
       <div className="alloc-head">
         <h3>Allocation of every dollar earned</h3>
-        <div className="income">{fmtAccurate(incomeMonthlyAvg)} avg / month &middot; {fmt(incomeAnnual)} / year</div>
+        <div className="income">
+          {payrollActive
+            ? fmtAccurate(grossIncomeAnnual / 12) + ' gross avg / month · ' + fmt(grossIncomeAnnual) + ' gross / year'
+            : fmtAccurate(incomeMonthlyAvg) + ' avg / month · ' + fmt(incomeAnnual) + ' / year'}
+        </div>
       </div>
       <div className="alloc-bar">
         <div className="seg-needs" style={{ width: seg(bucketAnnual.needs) + '%' }}></div>
         <div className="seg-wants" style={{ width: seg(bucketAnnual.wants) + '%' }}></div>
         <div className="seg-save"  style={{ width: seg(saveWithNet)        + '%' }}></div>
+        {showPretax && <div className="seg-save" style={{ width: seg(retHsaAnnual) + '%', opacity:0.6 }}></div>}
+        {showOther  && <div style={{ width: seg(otherDeductAnnual) + '%', height:'100%', background:'var(--muted)', opacity:0.35 }}></div>}
         <div className="seg-give"  style={{ width: seg(bucketAnnual.give)  + '%' }}></div>
         {showUnalloc && <div className="seg-left" style={{ width: seg(bucketAnnual.unalloc) + '%' }}></div>}
       </div>
@@ -624,12 +717,14 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
         <LegItem dot="needs" label="Needs"  amt={bucketAnnual.needs} p={bucketAnnual.needs/denom} avg={bucketMonthlyAvg.needs} />
         <LegItem dot="wants" label="Wants"  amt={bucketAnnual.wants} p={bucketAnnual.wants/denom} avg={bucketMonthlyAvg.wants} />
         <LegItem dot="save"  label="Saving" amt={saveWithNet}        p={saveWithNet /denom}       avg={saveAvg} />
+        {showPretax && <LegItem dot="save" label="Pretax savings"           amt={retHsaAnnual}     p={retHsaAnnual/denom}     avg={retHsaAnnual/12} />}
+        {showOther  && <LegItem dot="left" label="Other payroll deductions" amt={otherDeductAnnual} p={otherDeductAnnual/denom} avg={otherDeductAnnual/12} />}
         <LegItem dot="give"  label="Giving" amt={bucketAnnual.give}  p={bucketAnnual.give /denom} avg={bucketMonthlyAvg.give} />
         {showUnalloc && <LegItem dot="left" label="Unallocated" amt={bucketAnnual.unalloc} p={bucketAnnual.unalloc/denom} avg={bucketMonthlyAvg.unalloc} />}
       </div>
       <div className="alloc-rules">
-        <Rule label="Housing"      sub="rule of thumb: under 30% of income" val={pct1(housingGroup ? housingGroup.annual : 0, denom)} ok={housingPct <= 0.30} />
-        <Rule label="Savings rate" sub={payrollActive ? 'rule of thumb: 15% or more (of gross)' : 'rule of thumb: 15% or more'} val={pct1(savingsRateNum, savingsRateDenom)} ok={savingRate >= 0.15} />
+        <Rule label="Housing"      sub={payrollActive ? 'rule of thumb: under 30% of gross' : 'rule of thumb: under 30% of income'} val={pct1(housingGroup ? housingGroup.annual : 0, denom)} ok={housingPct <= 0.30} />
+        <Rule label="Savings rate" sub={payrollActive ? 'rule of thumb: 15% or more (of gross)' : 'rule of thumb: 15% or more'} val={pct1(savingsRateNum, denom)} ok={savingRate >= 0.15} />
         <Rule label="Giving"       val={pct1(bucketAnnual.give, denom)} ok={givingRate >= 0.10} />
       </div>
     </div>
@@ -678,10 +773,11 @@ function Kpi({ label, value, tone, integer, suffix, pct: pctMode }) {
 }
 
 /* Fix #1 / #6: per-row settings — fill mode, fund classification, payroll deductions */
-function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
+function RowSettingsModal({ kind, row, netMonthlyAvg = 0, deductionCatMatches = [], onSave, onClose }) {
   const isIncome = kind === 'income';
   const [fillMode, setFillMode] = React.useState(row.fillMode === 'manual' ? 'manual' : 'across');
   const [isFund,   setIsFund]   = React.useState(!!row.isFund);
+  const [flow,     setFlow]     = React.useState(row.flow || 'auto');   /* Fix 3.1 */
 
   const pd = row.payrollDeductions || {};
   const [r401k, setR401k] = React.useState(pd.retirement401k != null ? String(pd.retirement401k) : '');
@@ -705,6 +801,18 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
   const handleSave = () => {
     if (error) return;
     if (isIncome) {
+      /* Fix 5.1: double-count guard — a 401k/HSA deduction plus a same-named
+         budget category would count the money twice. */
+      if ((num(r401k) > 0 || num(hsa) > 0) && deductionCatMatches.length) {
+        const list = deductionCatMatches
+          .map(m => "'" + m.name + "' (" + fmt(m.monthlyAvg, { zero:'$0' }) + '/mo)').join(', ');
+        const ok = confirm(
+          'You also budget ' + list + ' as a spending category.\n\n' +
+          'If that is the same money as this payroll deduction, it will be counted twice. ' +
+          'Recommended: keep the payroll deduction here and delete that budget category.\n\n' +
+          'OK = save the deduction anyway   ·   Cancel = go back');
+        if (!ok) return;
+      }
       const payrollDeductions = {
         retirement401k: num(r401k), hsa: num(hsa),
         pretaxPremiums: num(prem),  otherPretax: num(other),
@@ -712,7 +820,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
       if (grossGiven) payrollDeductions.grossMonthly = num(gross);
       onSave({ fillMode, payrollDeductions });
     } else {
-      onSave({ fillMode, isFund });
+      onSave({ fillMode, isFund, flow });
     }
     onClose();
   };
@@ -720,7 +828,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
   const dedField = (label, value, setter) => (
     <div className="form-field" style={{ marginBottom:10 }}>
       <label style={{ marginBottom:4 }}>{label} <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>/ month</span></label>
-      <input type="number" min="0" step="10" className="form-input" placeholder="0" value={value} onChange={e => setter(e.target.value)} />
+      <input type="number" inputMode="decimal" min="0" step="10" className="form-input" placeholder="0" value={value} onChange={e => setter(e.target.value)} />
     </div>
   );
   const reconRow = (label, val, opts) => (
@@ -734,7 +842,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
       <div className="modal" style={{ width: isIncome ? 440 : 380 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head">
           <h2>{isIncome ? 'Income settings' : 'Category settings'}</h2>
-          <button className="modal-close" onClick={onClose}>&#215;</button>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
         </div>
         <div style={{ fontSize:13, color:'var(--muted)', margin:'-4px 0 14px' }}>{row.name || (isIncome ? 'Income source' : 'Category')}</div>
 
@@ -759,6 +867,17 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
               <input type="checkbox" checked={isFund} onChange={e => setIsFund(e.target.checked)} style={{ marginTop:2 }} />
               <span><strong>Fund</strong> — accrues its monthly budget and draws down as you log expenses on the Track tab. The Track card shows accrued budget to date less actual spending.</span>
             </label>
+
+            <label style={{ marginTop:16 }}>Counts as</label>
+            <select className="form-input" value={flow} onChange={e => setFlow(e.target.value)}>
+              <option value="auto">Auto — decide from the category name</option>
+              <option value="cash">Cash savings — feeds Beginning Cash</option>
+              <option value="lt">Long-term investing — feeds Beginning Long-term</option>
+              <option value="debt">Debt payment — reduces Beginning Debt</option>
+            </select>
+            <p style={{ fontSize:12, color:'var(--muted)', margin:'6px 0 0', textTransform:'none', letterSpacing:0 }}>
+              Overrides the name guess. Use this so "Roth IRA" or "Brokerage" route to long-term, and "Student loan" or "Car payment" count as debt.
+            </p>
           </div>
         )}
 
@@ -774,7 +893,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, onSave, onClose }) {
             {dedField('Other pretax', other, setOther)}
             <div className="form-field" style={{ marginBottom:6 }}>
               <label style={{ marginBottom:4 }}>Gross pay <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>/ month (optional)</span></label>
-              <input type="number" min="0" step="50" className="form-input" placeholder="optional — reveals implied taxes" value={gross} onChange={e => setGross(e.target.value)} />
+              <input type="number" inputMode="decimal" min="0" step="50" className="form-input" placeholder="optional — reveals implied taxes" value={gross} onChange={e => setGross(e.target.value)} />
             </div>
             <div style={{ background:'var(--bg-soft)', border:'1px solid var(--line-soft)', borderRadius:'var(--r-md)', padding:'10px 14px', marginTop:6 }}>
               {reconRow('Take-home (avg / mo)', fmtAccurate(net), { muted:true })}
@@ -810,11 +929,11 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
       <div className="modal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
         <div className="modal-head">
           <h2>Debt interest rate</h2>
-          <button className="modal-close" onClick={onClose}>&#215;</button>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
         </div>
         <div className="form-field">
           <label>Annual interest rate (%)</label>
-          <input type="number" className="form-input" value={rate}
+          <input type="number" inputMode="decimal" className="form-input" value={rate}
             onChange={e => setRate(e.target.value)}
             min="0" max="100" step="0.25" autoFocus placeholder="e.g. 6.5" />
         </div>
@@ -890,7 +1009,19 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogH
   const buckets = { needs:{b:0,a:0}, wants:{b:0,a:0}, save:{b:0,a:0}, give:{b:0,a:0} };
   cats.forEach(c => { if (buckets[c.bucket]) { buckets[c.bucket].b += c.budgeted; buckets[c.bucket].a += c.actual; } });
 
-  const addTransaction    = tx => setData(d => ({ ...d, transactions: [...d.transactions, { id:uid(), ...tx }] }));
+  /* Fix 3.2: an expense dated in another month/year would silently vanish from
+     the current view. Follow it: switch to its month, or warn if it's another year. */
+  const addTransaction    = tx => {
+    setData(d => ({ ...d, transactions: [...d.transactions, { id:uid(), ...tx }] }));
+    const td = new Date(tx.date + 'T00:00:00');
+    const txMonth = td.getMonth(), txYear = td.getFullYear();
+    if (txYear !== data.year) {
+      alert('This expense is dated ' + txYear + " — it won't appear in your " + data.year +
+            ' views. Change the year at the top of the app to see it.');
+    } else if (txMonth !== monthIdx) {
+      setMonthIdx(txMonth);
+    }
+  };
   const deleteTransaction = id => setData(d => ({ ...d, transactions: d.transactions.filter(t => t.id !== id) }));
 
   const openModalForCat = (catId) => { setDefaultCatId(catId); setShowModal(true); };
@@ -1138,11 +1269,11 @@ function LogExpenseModal({ data, monthIdx, year, defaultCategoryId, onSave, onCl
       <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head">
           <h2>Log expense</h2>
-          <button className="modal-close" onClick={onClose}>&#215;</button>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
         </div>
         <div className="form-field">
           <label>Amount</label>
-          <input type="number" min="0.01" step="0.01" className="form-input"
+          <input type="number" inputMode="decimal" min="0.01" step="0.01" className="form-input"
             placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
         </div>
         <div className="form-field">
@@ -1181,7 +1312,7 @@ function CategoryCard({ cat, dayOfMonth, daysInMonth, onClick }) {
         onMouseEnter={e => { e.currentTarget.style.boxShadow='0 2px 10px rgba(0,0,0,0.09)'; }}
         onMouseLeave={e => { e.currentTarget.style.boxShadow=''; }}>
         <div className="cat-head">
-          <div className="name-c"><span className="dot" style={{ background:barColor }}></span>{cat.name}<span className="fund-badge">Fund</span></div>
+          <div className="name-c"><span className="dot" style={{ background:barColor }}></span>{cat.name}<span className="fund-badge" style={{ cursor:'help' }} title="Fund: accrues its monthly budget and draws down as you log expenses — the amount shown is what remains available, not a monthly reset.">Fund</span></div>
           <div className="amounts"><span style={{ color: bal < 0 ? 'var(--warn)' : 'var(--ink)' }}>{fmt(bal, { zero:'$0' })}</span><span className="of"> avail</span></div>
         </div>
         <div className="bar">
@@ -1228,13 +1359,13 @@ function CategoryCard({ cat, dayOfMonth, daysInMonth, onClick }) {
 function PlanScreen({ data, setData }) {
   const cashContribDefault = React.useMemo(() => {
     let s = 0;
-    data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save' && !isLtSavings(c.name)) s += sum(c.monthly); }));
+    data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save' && !catIsLtSavings(c) && !catIsDebtPayment(c)) s += sum(c.monthly); }));
     return Math.round(s / 12);
   }, [data.groups]);
 
   const ltContribDefault = React.useMemo(() => {
     let s = 0;
-    data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save' && isLtSavings(c.name)) s += sum(c.monthly); }));
+    data.groups.forEach(g => g.cats.forEach(c => { if (c.bucket === 'save' && catIsLtSavings(c) && !catIsDebtPayment(c)) s += sum(c.monthly); }));
     /* Fix #6: pretax 401k + HSA (monthly) also flow into long-term investments */
     data.income.forEach(r => { const p = r.payrollDeductions || {}; s += ((+p.retirement401k||0) + (+p.hsa||0)) * 12; });
     return Math.round(s / 12);
@@ -1243,7 +1374,7 @@ function PlanScreen({ data, setData }) {
   /* Default debt payment from budget categories with "debt" or "interest" in name */
   const debtPaymentDefault = React.useMemo(() => {
     let s = 0;
-    data.groups.forEach(g => g.cats.forEach(c => { if (isDebtPayment(c.name)) s += sum(c.monthly); }));
+    data.groups.forEach(g => g.cats.forEach(c => { if (catIsDebtPayment(c)) s += sum(c.monthly); }));
     return Math.round(s / 12);
   }, [data.groups]);
 
@@ -1384,7 +1515,7 @@ function PlanScreen({ data, setData }) {
       </div>
 
       <div className="plan-grid">
-        <div className="chart-card" style={{ position:'sticky', top:80, alignSelf:'start' }}>
+        <div className="chart-card">
           <h3>Projected balance</h3>
           <div className="caption">
             Cash: {fmt(cashContrib, { zero:'$0' })}/mo @ {cashYield}%
@@ -1425,7 +1556,9 @@ function PlanScreen({ data, setData }) {
 
         {presetMilestones.map(m => {
           const eta = monthsToReachTotal(m.target);
-          const p   = Math.min(100, Math.round((finalBal / m.target) * 100));
+          /* Fix 3.4: asset milestones use cash+LT for BOTH the % and the ETA sim
+             (the ETA function already ignores debt); the Debt-free row covers debt. */
+          const p   = Math.min(100, Math.round(((finalCash + finalLT) / m.target) * 100));
           return (
             <div className="milestone-row" key={m.name}>
               <div className="ms-name"><strong>{m.name}</strong><span>{m.detail} &middot; {fmt(Math.round(m.target))}</span></div>
@@ -1537,7 +1670,7 @@ function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
-        <div className="modal-head"><h2>Add milestone</h2><button className="modal-close" onClick={onClose}>&#215;</button></div>
+        <div className="modal-head"><h2>Add milestone</h2><button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button></div>
         <div className="form-field">
           <label>Milestone name</label>
           <input type="text" className="form-input" value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="e.g. Beach house fund" />
@@ -1548,7 +1681,7 @@ function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }
         </div>
         <div className="form-field">
           <label>Goal amount ($)</label>
-          <input type="number" className="form-input" value={target} onChange={e => setTarget(e.target.value)} placeholder="0" min="0" step="100" />
+          <input type="number" inputMode="decimal" className="form-input" value={target} onChange={e => setTarget(e.target.value)} placeholder="0" min="0" step="100" />
         </div>
         <div className="form-field">
           <label>Account type</label>
@@ -1559,7 +1692,7 @@ function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }
         </div>
         <div className="form-field">
           <label>Starting balance <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(optional)</span></label>
-          <input type="number" className="form-input" value={startBal} onChange={e => setStartBal(e.target.value)} placeholder={ph} min="0" step="100" />
+          <input type="number" inputMode="decimal" className="form-input" value={startBal} onChange={e => setStartBal(e.target.value)} placeholder={ph} min="0" step="100" />
         </div>
         {err && <div className="form-error">{err}</div>}
         <div className="modal-actions">
@@ -1638,8 +1771,15 @@ function ProjectionChart({ series, years }) {
   <script type="text/babel">
 /* ---- App shell ---- */
 function App() {
-  const [screen,   setScreen]   = React.useState('budget');
-  const [monthIdx, setMonthIdx] = React.useState(Math.min(new Date().getMonth(), 11));
+  /* Fix 1.1: remember the active tab and viewed month across refreshes. */
+  const [screen,   setScreen]   = React.useState(() => {
+    try { const s = localStorage.getItem('ledger.ui.screen'); if (['budget','track','plan'].includes(s)) return s; } catch (_) {}
+    return 'budget';
+  });
+  const [monthIdx, setMonthIdx] = React.useState(() => {
+    try { const m = parseInt(localStorage.getItem('ledger.ui.month'), 10); if (m >= 0 && m <= 11) return m; } catch (_) {}
+    return Math.min(new Date().getMonth(), 11);
+  });
   const [showDataMenu,      setShowDataMenu]      = React.useState(false);   // Fix #3
   const [pendingLogExpense, setPendingLogExpense] = React.useState(false);   // Fix #3 (FAB)
   const [data,     setData]     = React.useState(() => {
@@ -1653,6 +1793,19 @@ function App() {
   React.useEffect(() => {
     try { localStorage.setItem('ledger.data.v2', JSON.stringify(data)); } catch (_) {}
   }, [data]);
+  React.useEffect(() => { try { localStorage.setItem('ledger.ui.screen', screen); } catch (_) {} }, [screen]);
+  React.useEffect(() => { try { localStorage.setItem('ledger.ui.month', String(monthIdx)); } catch (_) {} }, [monthIdx]);
+
+  /* Fix 2.2: one-time notice that Ledger keeps a single budget across years. */
+  const changeYear = (delta) => {
+    try {
+      if (!localStorage.getItem('ledger.notice.year')) {
+        alert('Ledger keeps one budget. Changing the year relabels it and shows only that year’s logged expenses.');
+        localStorage.setItem('ledger.notice.year', '1');
+      }
+    } catch (_) {}
+    setData(d => ({ ...d, year: d.year + delta }));
+  };
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1699,9 +1852,9 @@ function App() {
         </nav>
         <div className="topbar-right">
           <div className="year-pill">
-            <button onClick={() => setData(d => ({ ...d, year: d.year - 1 }))} aria-label="Previous year">‹</button>
+            <button onClick={() => changeYear(-1)} aria-label="Previous year">‹</button>
             <span>{data.year}</span>
-            <button onClick={() => setData(d => ({ ...d, year: d.year + 1 }))} aria-label="Next year">›</button>
+            <button onClick={() => changeYear(1)} aria-label="Next year">›</button>
           </div>
           <div className="desktop-data-actions">
             <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>

@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger — UX &amp; Design Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#FAF6EE; --bg-soft:#F2ECDF; --surface:#FFFFFF; --ink:#1C1814; --ink-soft:#4A4238;
+  --muted:#8C8275; --line:#E8DFCE; --line-soft:#F0E9DA;
+  --needs:#325985; --wants:#A43B35; --save:#6E8B5C; --give:#5B3A8C; --accent:#3D6B4A; --warn:#C8362B;
+  --hi:#C8362B; --ok:#6E8B5C; --mid:#B8863B;
+  --serif:"Instrument Serif","Cormorant Garamond",Georgia,serif;
+  --sans:"Geist","Inter",system-ui,-apple-system,sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+img{max-width:100%}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:400;letter-spacing:-0.01em;line-height:1.08}
+em{font-style:italic;color:var(--accent)}
+a{color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---- top hero ---- */
+.hero{border-bottom:1px solid var(--line);padding:52px 0 40px;background:linear-gradient(180deg,#FBF8F1,var(--bg))}
+.hero .badge{display:inline-flex;align-items:center;gap:8px;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin-bottom:18px}
+.hero .badge .mark{width:16px;height:16px;border-radius:50%;background:var(--accent);box-shadow:inset 0 0 0 3px var(--bg);outline:1px solid var(--accent)}
+.hero h1{font-size:60px;margin:0 0 14px}
+.hero p.lede{font-size:19px;color:var(--ink-soft);max-width:70ch;margin:0 0 8px}
+.hero .meta{color:var(--muted);font-size:13.5px;margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 22px}
+.hero .meta b{color:var(--ink-soft);font-weight:500}
+
+/* ---- section rhythm ---- */
+section{padding:46px 0;border-bottom:1px solid var(--line-soft)}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);font-weight:600;margin:0 0 10px}
+section h2{font-size:34px;margin:0 0 8px}
+section .intro{color:var(--ink-soft);max-width:74ch;margin:0 0 28px;font-size:16px}
+
+/* ---- sticky mini-nav ---- */
+.tocbar{position:sticky;top:0;z-index:40;background:rgba(250,246,238,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.tocbar .wrap{display:flex;align-items:center;gap:4px;height:52px;overflow-x:auto}
+.tocbar .brand{font-family:var(--serif);font-style:italic;font-size:19px;margin-right:14px;white-space:nowrap}
+.tocbar a{color:var(--ink-soft);text-decoration:none;font-size:13px;padding:6px 11px;border-radius:999px;white-space:nowrap}
+.tocbar a:hover{background:var(--bg-soft);color:var(--ink)}
+
+/* ---- scorecard ---- */
+.score-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.score{background:var(--surface);padding:18px 20px;display:flex;flex-direction:column;gap:6px}
+.score .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.score .cat{font-size:13.5px;font-weight:500;color:var(--ink)}
+.score .stars{font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap}
+.score .num{font-family:var(--serif);font-size:30px;line-height:1}
+.score .bar{height:6px;border-radius:3px;background:var(--bg-soft);overflow:hidden}
+.score .bar>div{height:100%;border-radius:3px}
+.score small{color:var(--muted);font-size:12px}
+.overall{margin-top:22px;background:var(--ink);color:var(--bg);border-radius:14px;padding:24px 28px;display:flex;align-items:center;gap:26px;flex-wrap:wrap}
+.overall .big{font-family:var(--serif);font-size:56px;line-height:1}
+.overall .say{font-size:16px;max-width:60ch;color:#EDE7DA}
+.overall .say b{color:#fff}
+
+/* ---- finding cards ---- */
+.findings{display:grid;gap:14px}
+.finding{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start}
+.finding .pin{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:500;color:#fff;flex:0 0 30px}
+.finding h4{font-size:18px;margin:0 0 4px;font-family:var(--sans);font-weight:600;letter-spacing:0}
+.finding p{margin:0;color:var(--ink-soft);font-size:14.5px}
+.finding .tags{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.tag{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;white-space:nowrap;font-weight:600}
+.tag.hi{background:#F7E4E1;color:var(--hi)}
+.tag.mid{background:#F5EAD6;color:var(--mid)}
+.tag.low{background:#E7EFE1;color:var(--ok)}
+.tag.eff{background:var(--bg-soft);color:var(--muted)}
+.pin.hi{background:var(--hi)} .pin.mid{background:var(--mid)} .pin.low{background:var(--ok)}
+
+/* ---- device frames ---- */
+.showcase{display:grid;gap:26px}
+.browser{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:0 12px 40px rgba(28,24,20,.08)}
+.browser .chrome{height:34px;background:var(--bg-soft);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px;padding:0 13px}
+.browser .chrome i{width:11px;height:11px;border-radius:50%;background:#D8CDB8;display:block}
+.browser .chrome .url{margin-left:12px;background:var(--surface);border:1px solid var(--line);border-radius:999px;font-size:11px;color:var(--muted);padding:3px 12px;font-family:var(--mono)}
+.frame-cap{font-size:13px;color:var(--muted);margin:10px 2px 0;display:flex;gap:8px;align-items:center}
+.frame-cap.before b{color:var(--hi)} .frame-cap.after b{color:var(--ok)}
+
+/* recreation of the app (mini, faithful tokens) */
+.app-mini{font-size:12px}
+.app-mini .tb{display:flex;align-items:center;gap:16px;padding:11px 18px;border-bottom:1px solid var(--line);background:var(--bg)}
+.app-mini .tb .lg{font-family:var(--serif);font-style:italic;font-size:17px;display:flex;align-items:center;gap:7px}
+.app-mini .tb .lg .m{width:13px;height:13px;border-radius:50%;background:var(--accent);box-shadow:inset 0 0 0 2px var(--bg);outline:1px solid var(--accent)}
+.app-mini .nav{display:flex;gap:2px}
+.app-mini .nav span{padding:5px 11px;border-radius:999px;font-size:12px;color:var(--ink-soft)}
+.app-mini .nav span.on{background:var(--ink);color:var(--bg)}
+.app-mini .tb .rt{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11.5px}
+.app-mini .yr{border:1px solid var(--line);border-radius:999px;padding:3px 11px;color:var(--ink);background:var(--surface);font-family:var(--mono)}
+.app-mini .av{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--bg);display:grid;place-items:center;font-size:10px;font-weight:600}
+.app-mini .body{padding:20px 18px}
+.app-mini .phead{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;gap:14px}
+.app-mini .phead h3{font-size:30px;margin:0}
+.app-mini .phead .sub{color:var(--muted);font-size:12.5px;max-width:44ch}
+.app-mini .cta{background:var(--ink);color:var(--bg);border-radius:999px;padding:7px 14px;font-size:12px;white-space:nowrap}
+.app-mini .ghostlinks{display:flex;gap:12px;align-items:center;color:var(--muted);font-size:12px}
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:18px}
+.kpi-row.four{grid-template-columns:repeat(4,1fr)}
+.kpi-c{background:var(--surface);padding:13px 15px}
+.kpi-c .l{font-size:9px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);margin-bottom:5px}
+.kpi-c .v{font-family:var(--serif);font-size:25px;line-height:1;font-variant-numeric:tabular-nums}
+.kpi-c .d{font-size:10px;color:var(--save);margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+
+/* budget sheet mini */
+.sheet{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.sheet .scroll{overflow-x:auto}
+.srow{display:grid;grid-template-columns:150px repeat(7,52px) 70px;align-items:center;height:30px;border-top:1px solid var(--line-soft);font-family:var(--mono);font-size:10.5px}
+.srow.h{background:var(--bg-soft);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-size:8.5px;height:28px;border-top:0}
+.srow.sec{background:var(--bg-soft);text-transform:uppercase;letter-spacing:.1em;font-size:9px;color:var(--ink);font-family:var(--sans);font-weight:600}
+.srow>div{padding:0 7px;text-align:right;white-space:nowrap;overflow:hidden}
+.srow>div.nm{text-align:left;font-family:var(--sans);color:var(--ink);display:flex;align-items:center;gap:7px}
+.srow>div.an{border-left:1px solid var(--line-soft);font-weight:500;color:var(--ink)}
+.srow .bd{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
+.bd.needs{background:var(--needs)}.bd.wants{background:var(--wants)}.bd.save{background:var(--save)}.bd.give{background:var(--give)}
+.frozen{box-shadow:6px 0 0 -5px rgba(0,0,0,.12)}
+
+/* track cards mini */
+.tcards{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tcard{border:1px solid var(--line);border-radius:9px;padding:11px 12px;background:var(--surface)}
+.tcard .r1{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:8px}
+.tcard .r1 .nm{display:flex;align-items:center;gap:6px}
+.tcard .r1 .amt{font-family:var(--mono);font-size:11px}
+.tcard .pbar{height:5px;border-radius:3px;background:var(--bg-soft);overflow:hidden}
+.tcard .pbar>div{height:100%}
+.tcard .lo{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-top:5px}
+
+/* annotation overlay */
+.anno{position:relative}
+.dot-pin{position:absolute;width:26px;height:26px;border-radius:50%;color:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600;border:2px solid var(--surface);box-shadow:0 3px 10px rgba(0,0,0,.28);cursor:pointer;z-index:3;transition:transform .12s}
+.dot-pin:hover{transform:scale(1.18)}
+.dot-pin.hi{background:var(--hi)} .dot-pin.mid{background:var(--mid)} .dot-pin.low{background:var(--ok)}
+.hl{position:absolute;border:2px dashed var(--hi);border-radius:8px;pointer-events:none;z-index:2}
+.hl.mid{border-color:var(--mid)} .hl.low{border-color:var(--ok)}
+
+/* callout list beside a figure */
+.two{display:grid;grid-template-columns:1.35fr 1fr;gap:28px;align-items:start}
+.callouts{display:grid;gap:10px}
+.callout{display:grid;grid-template-columns:auto 1fr;gap:11px;align-items:start;font-size:14px}
+.callout .n{width:24px;height:24px;border-radius:50%;color:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:600;flex:0 0 24px}
+.callout .n.hi{background:var(--hi)}.callout .n.mid{background:var(--mid)}.callout .n.low{background:var(--ok)}
+.callout b{color:var(--ink)}
+.callout p{margin:2px 0 0;color:var(--ink-soft)}
+
+/* before/after toggle */
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.mob-wrap{display:flex;justify-content:center}
+.phone{width:300px;border:9px solid #23201B;border-radius:34px;overflow:hidden;background:var(--surface);box-shadow:0 18px 50px rgba(28,24,20,.18)}
+.phone .notch{height:22px;background:#23201B;display:flex;justify-content:center;align-items:flex-start}
+.phone .notch i{width:90px;height:6px;border-radius:0 0 8px 8px;background:#3a352d;margin-top:0}
+.phone .screen{height:520px;overflow:hidden;position:relative;background:var(--bg)}
+.phone .screen.scrollable{overflow-y:auto}
+
+/* recommendation roadmap table */
+.road{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.road th,.road td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:13.5px;vertical-align:top}
+.road th{background:var(--bg-soft);font-family:var(--sans);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.road tr:last-child td{border-bottom:0}
+.road .p{font-weight:600}
+.chip{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em}
+.chip.now{background:#F7E4E1;color:var(--hi)}.chip.next{background:#F5EAD6;color:var(--mid)}.chip.later{background:#E7EFE1;color:var(--ok)}
+
+.note{background:#FBF8F1;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:14px 18px;font-size:14px;color:var(--ink-soft);margin-top:18px}
+.pillrow{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 0}
+.pill{font-size:12px;padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft)}
+.foot{padding:36px 0 60px;color:var(--muted);font-size:13px;text-align:center}
+
+@media (max-width:820px){
+  .two,.ba,.score-grid{grid-template-columns:1fr}
+  .hero h1{font-size:42px}
+  .kpi-row,.kpi-row.four{grid-template-columns:repeat(2,1fr)}
+  .finding{grid-template-columns:auto 1fr}
+  .finding .tags{grid-column:2;flex-direction:row}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== sticky mini nav ===== -->
+<div class="tocbar"><div class="wrap">
+  <span class="brand">Ledger</span>
+  <a href="#summary">Summary</a>
+  <a href="#scorecard">Scorecard</a>
+  <a href="#top">Top findings</a>
+  <a href="#budget">Budget</a>
+  <a href="#track">Track</a>
+  <a href="#plan">Plan</a>
+  <a href="#mobile">Mobile</a>
+  <a href="#redesign">Redesign</a>
+  <a href="#roadmap">Roadmap</a>
+</div></div>
+
+<!-- ===== hero ===== -->
+<header class="hero"><div class="wrap">
+  <div class="badge"><span class="mark"></span> UX &amp; Product Design Review</div>
+  <h1>Ledger is beautiful on a desktop.<br>It's not yet a <em>mobile product</em>.</h1>
+  <p class="lede">A designer's walkthrough of all three tabs — Budget, Track, Plan — covering interface, hierarchy, the desktop&nbsp;+&nbsp;mobile story on your Vercel setup, and a professional read on layout and usability. Annotated views of the current screens sit next to mockups of where they could go.</p>
+  <div class="meta">
+    <span><b>Reviewed:</b> ledger-budget-app-zeta.vercel.app</span>
+    <span><b>Stack:</b> React 18 + Babel (single page), localStorage</span>
+    <span><b>Date:</b> July 2026</span>
+    <span><b>Method:</b> live walkthrough + source audit</span>
+  </div>
+  <div class="note" style="margin-top:22px">The screens below are faithful, to-scale <b>recreations</b> built from your live app and its exact design tokens (colours, type, spacing pulled from <span class="mono">styles.css</span>). I rebuilt them rather than pasting bitmaps so I could overlay precise annotations and place the "after" directly beside the "before." Every colour, font, and layout ratio matches the deployed app.</div>
+</div></header>
+
+<main>
+
+<!-- ===== summary ===== -->
+<section id="summary"><div class="wrap">
+  <p class="eyebrow">The one-paragraph version</p>
+  <h2>What's working, and the one thing holding it back</h2>
+  <p class="intro">Ledger has a genuinely distinctive point of view. The warm, editorial aesthetic — Instrument Serif numerals on a cream field — is a deliberate rejection of the cold fintech dashboard, and it lands. The zero-based, "give every dollar a job" structure with a dedicated <b>Giving</b> bucket is both on-trend and personal, and the three-tab arc (plan the year → track the month → project the future) is a clean mental model. On a laptop it feels considered and calm.</p>
+  <div class="two">
+    <div>
+      <h3 style="font-size:20px;margin:0 0 10px">Strengths to protect</h3>
+      <div class="pillrow">
+        <span class="pill">Distinctive, cohesive brand</span>
+        <span class="pill">Values-based "Giving" bucket</span>
+        <span class="pill">Clear 3-tab arc</span>
+        <span class="pill">Progress bars &amp; over-budget states</span>
+        <span class="pill">Local-first privacy</span>
+        <span class="pill">Milestone ETAs on Plan</span>
+        <span class="pill">Collapsible instructions</span>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:20px;margin:0 0 10px">The gaps that matter most</h3>
+      <div class="pillrow">
+        <span class="pill" style="border-color:var(--hi);color:var(--hi)">No responsive design (1 media query)</span>
+        <span class="pill" style="border-color:var(--hi);color:var(--hi)">No cross-device sync</span>
+        <span class="pill" style="border-color:var(--mid);color:var(--mid)">Low-contrast secondary text</span>
+        <span class="pill" style="border-color:var(--mid);color:var(--mid)">14-col sheet, unfrozen labels</span>
+        <span class="pill" style="border-color:var(--mid);color:var(--mid)">Duplicated totals on Track</span>
+        <span class="pill" style="border-color:var(--mid);color:var(--mid)">"Reset" as a plain text link</span>
+      </div>
+    </div>
+  </div>
+  <div class="note">The headline: <b>your CSS contains exactly one media query</b> — and the viewport is set to <span class="mono">device-width</span>, so a phone renders the full desktop layout squeezed into ~390&nbsp;px rather than a version built for the phone. Since Vercel serves the same build to every device, your mobile visitors currently get the hardest possible version of the app. Fixing that is the single highest-leverage move — and it's mostly CSS.</div>
+</div></section>
+
+<!-- ===== scorecard ===== -->
+<section id="scorecard"><div class="wrap">
+  <p class="eyebrow">Professional scorecard</p>
+  <h2>Eight dimensions, rated</h2>
+  <p class="intro">Scored the way I'd assess any consumer product heading toward launch — on a 1–5 scale, weighing what a first-time user experiences, not just what the code can do.</p>
+  <div class="score-grid" id="scoreGrid"></div>
+  <div class="overall">
+    <div class="big">3.1<span style="font-size:24px;color:#B8AE9B">/5</span></div>
+    <div class="say"><b>Capable and charming on desktop; not yet a product you'd hand someone to open on their phone.</b> Nearly all of the gap is concentrated in two fixable areas — responsive layout and multi-device data — rather than spread thinly across the whole app. That's good news: a focused sprint moves the overall score a lot.</div>
+  </div>
+</div></section>
+
+<!-- ===== top findings ===== -->
+<section id="top"><div class="wrap">
+  <p class="eyebrow">Prioritised</p>
+  <h2>The ten findings that matter</h2>
+  <p class="intro">Ordered by impact. The colour of each number matches its severity — <span style="color:var(--hi);font-weight:600">red = high</span>, <span style="color:var(--mid);font-weight:600">amber = medium</span>, <span style="color:var(--ok);font-weight:600">green = polish</span>. Effort is a rough engineering read.</p>
+  <div class="findings" id="findingList"></div>
+</div></section>
+
+<!-- ===== BUDGET TAB ===== -->
+<section id="budget"><div class="wrap">
+  <p class="eyebrow">Tab 1 of 3 · The annual sheet</p>
+  <h2>Budget</h2>
+  <p class="intro">The heart of the app: a 12-month cash grid with income, categories, and needs/wants/save/give buckets. It's dense, powerful, and where the most editing happens — which makes its ergonomics the ones that matter most. Hover the numbered pins.</p>
+
+  <div class="browser anno" id="budgetFig">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">ledger-budget-app-zeta.vercel.app</span></div>
+    <div class="app-mini">
+      <div class="tb">
+        <div class="lg"><span class="m"></span> Ledger</div>
+        <div class="nav"><span class="on">Budget</span><span>Track</span><span>Plan</span></div>
+        <div class="rt"><span class="yr">‹ 2026 ›</span><span>Export</span><span>Import</span><span style="color:var(--warn)">Reset</span><span class="av">M</span></div>
+      </div>
+      <div class="body">
+        <div class="phead">
+          <div><h3>2026 <em>cash budget</em></h3><div class="sub">Estimate every dollar in and out, month by month.</div></div>
+          <div class="ghostlinks">CSV template · Upload CSV · Fill across <span class="cta">Save budget</span></div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-c"><div class="l">Annual income</div><div class="v">$101,184</div></div>
+          <div class="kpi-c"><div class="l">Gross income</div><div class="v">$107,184</div></div>
+          <div class="kpi-c"><div class="l">Annual outflow</div><div class="v">$100,366</div></div>
+          <div class="kpi-c"><div class="l">Annual savings</div><div class="v">$29,834</div><div class="d">positive savings</div></div>
+          <div class="kpi-c"><div class="l">Year-end wealth</div><div class="v">$478,576</div></div>
+        </div>
+        <div class="sheet"><div class="scroll"><div style="min-width:660px">
+          <div class="srow h"><div class="nm">Category</div><div>Jan</div><div>Feb</div><div>Mar</div><div>Apr</div><div>May</div><div>Jun</div><div>…</div><div class="an">Annual</div></div>
+          <div class="srow sec"><div class="nm">Receipts</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div class="an"></div></div>
+          <div class="srow"><div class="nm"><span class="bd" style="background:var(--ink)"></span>Salary</div><div>4600</div><div>4600</div><div>4600</div><div>4600</div><div>4600</div><div>4600</div><div>…</div><div class="an">$55,200</div></div>
+          <div class="srow"><div class="nm"><span class="bd" style="background:var(--ink)"></span>Partner income</div><div>3432</div><div>3432</div><div>3432</div><div>3432</div><div>3432</div><div>3432</div><div>…</div><div class="an">$41,184</div></div>
+          <div class="srow sec"><div class="nm">Disbursements</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div class="an"></div></div>
+          <div class="srow"><div class="nm"><span class="bd needs"></span>Rent</div><div>2100</div><div>2100</div><div>2100</div><div>2100</div><div>2100</div><div>2100</div><div>…</div><div class="an">$25,200</div></div>
+          <div class="srow"><div class="nm"><span class="bd wants"></span>Entertainment</div><div>60</div><div>60</div><div>60</div><div>60</div><div>60</div><div>60</div><div>…</div><div class="an">$720</div></div>
+          <div class="srow"><div class="nm"><span class="bd save"></span>Retirement</div><div>1306</div><div>1306</div><div>1306</div><div>1306</div><div>1306</div><div>1306</div><div>…</div><div class="an">$15,672</div></div>
+          <div class="srow"><div class="nm"><span class="bd give"></span>Charitable</div><div>793</div><div>793</div><div>793</div><div>793</div><div>793</div><div>793</div><div>…</div><div class="an">$9,516</div></div>
+        </div></div></div>
+      </div>
+    </div>
+    <!-- pins -->
+    <span class="dot-pin mid" style="left:calc(50% + 250px);top:60px" data-f="Header overflow risk">1</span>
+    <span class="dot-pin hi" style="right:150px;top:60px" data-f="Destructive Reset">2</span>
+    <span class="dot-pin mid" style="left:20px;top:298px" data-f="Unfrozen labels">3</span>
+    <span class="dot-pin low" style="left:calc(50% - 60px);top:170px" data-f="Serif KPI numbers">4</span>
+    <span class="dot-pin mid" style="right:150px;top:150px" data-f="Save vs autosave">5</span>
+  </div>
+  <div class="frame-cap before"><b>▲ Current</b> — recreation of the live Budget tab with the sheet horizontally scrolled to show the failure mode</div>
+
+  <div class="two" style="margin-top:28px">
+    <div class="callouts">
+      <div class="callout"><span class="n mid">3</span><div><b>Row labels scroll away.</b><p>The sheet is 14 columns wide (12 months + category + annual). It scrolls horizontally on any laptop under ~1400&nbsp;px, and always on mobile — but the <b>category column isn't frozen</b>, so as soon as you scroll to see later months, you lose the row names. This is the classic spreadsheet sin. Freeze the first (Category) and last (Annual) columns with <span class="mono">position:sticky</span>.</p></div></div>
+      <div class="callout"><span class="n hi">2</span><div><b>"Reset" is a plain text link beside Import.</b><p>It wipes all budget and transaction data. It does show a <span class="mono">confirm()</span> (good), but visually it carries the same weight as Export/Import and sits one fumble away — risky on touch. Move Export/Import/Reset into an overflow "•••" menu and give Reset a warning treatment.</p></div></div>
+      <div class="callout"><span class="n mid">5</span><div><b>"Save budget" competes with autosave.</b><p>The app already writes every keystroke to <span class="mono">localStorage</span>. A prominent primary <b>Save budget</b> button that flips to "Saved ✓" makes users wonder whether their earlier edits were saved. Either replace it with a quiet "All changes saved" status, or make Save do something distinct — a named snapshot/version.</p></div></div>
+      <div class="callout"><span class="n mid">1</span><div><b>The header will overflow.</b><p>Brand + 3 nav pills + year pill + Export + Import + Reset + avatar all live in one non-wrapping row. There's no room to breathe below ~900&nbsp;px; on a phone it clips. See the Mobile section for the fix.</p></div></div>
+      <div class="callout"><span class="n low">4</span><div><b>Instrument Serif for KPI figures.</b><p>Gorgeous for the brand, but a thin display serif is the least scannable choice for the numbers people actually compare. Consider Geist / Geist&nbsp;Mono semibold for KPI values and keep the serif for titles — or keep the serif but add weight and tabular tracking.</p></div></div>
+    </div>
+    <div>
+      <div class="note" style="margin-top:0"><b>Also strong here:</b> the collapsible Instructions panel, the "Fill across from Jan" shortcut, per-bucket colour dots, and the allocation bar with rules-of-thumb are all thoughtful touches that reduce the intimidation of a big grid. Don't lose them.</div>
+      <h4 style="font-size:17px;margin:22px 0 8px;font-family:var(--sans);font-weight:600;letter-spacing:0">Quick win</h4>
+      <p style="color:var(--ink-soft);font-size:14px;margin:0">Freezing the Category column alone measurably improves the sheet on every screen size and is a handful of CSS lines. Pair it with a default "Annual + monthly average" compact view (expand to 12 months on demand) and the tab stops feeling like a wall of numbers.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ===== TRACK TAB ===== -->
+<section id="track"><div class="wrap">
+  <p class="eyebrow">Tab 2 of 3 · The month view</p>
+  <h2>Track</h2>
+  <p class="intro">Where you log real spending against the plan. This is the tab a user opens most often — ideally in seconds, on a phone, standing at a checkout. The card grid and over-budget states are the best-designed part of the app; the redundancy and one mystery control are what to tighten.</p>
+
+  <div class="browser anno" id="trackFig">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">ledger-budget-app-zeta.vercel.app</span></div>
+    <div class="app-mini">
+      <div class="tb">
+        <div class="lg"><span class="m"></span> Ledger</div>
+        <div class="nav"><span>Budget</span><span class="on">Track</span><span>Plan</span></div>
+        <div class="rt"><span class="yr">‹ 2026 ›</span><span>Export</span><span>Import</span><span style="color:var(--warn)">Reset</span><span class="av">M</span></div>
+      </div>
+      <div class="body">
+        <div class="phead">
+          <div><h3>July, <em>so far</em></h3><div class="sub">Day 2 of 31 — 6% through the month. Click any category card to log an expense.</div></div>
+          <div class="ghostlinks">‹ June · August › · Transactions <span class="cta">Log expense</span></div>
+        </div>
+        <div class="kpi-row four">
+          <div class="kpi-c"><div class="l">Income budgeted</div><div class="v">$8,432</div></div>
+          <div class="kpi-c"><div class="l">Spent so far</div><div class="v">$2,474</div></div>
+          <div class="kpi-c"><div class="l">Left in budget</div><div class="v">$5,890</div><div class="d">positive savings</div></div>
+          <div class="kpi-c"><div class="l">Budget used</div><div class="v">30%</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin:2px 2px 8px"><span style="color:var(--needs);font-weight:600">● NEEDS</span><span class="mono">$2,474 of $4,561 · 54%</span></div>
+            <div class="tcards">
+              <div class="tcard"><div class="r1"><span class="nm"><span class="bd needs"></span>Rent</span><span class="amt">$2,100 / $2,100</span></div><div class="pbar"><div style="width:100%;background:var(--needs)"></div></div><div class="lo"><span>click to log</span><span>100%</span></div></div>
+              <div class="tcard"><div class="r1"><span class="nm"><span class="bd needs"></span>Utilities</span><span class="amt">$104 / $175</span></div><div class="pbar"><div style="width:60%;background:var(--needs)"></div></div><div class="lo"><span>click to log</span><span>60%</span></div></div>
+              <div class="tcard"><div class="r1"><span class="nm"><span class="bd needs"></span>Car Ins.</span><span class="amt">$0 / $230</span></div><div class="pbar"><div style="width:0"></div></div><div class="lo"><span>click to log</span><span>0%</span></div></div>
+              <div class="tcard"><div class="r1"><span class="nm"><span class="bd needs"></span>Dental</span><span class="amt">$0 / $117</span></div><div class="pbar"><div style="width:0"></div></div><div class="lo"><span>click to log</span><span>0%</span></div></div>
+            </div>
+          </div>
+          <div class="card" style="padding:14px 15px">
+            <h4 style="font-size:18px;margin:0 0 12px">July at a glance</h4>
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:6px 0;border-bottom:1px solid var(--line-soft)"><span>Income (budgeted)</span><span class="mono">$8,432</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:6px 0;border-bottom:1px solid var(--line-soft)"><span><span class="bd needs" style="display:inline-block"></span> Needs</span><span class="mono">$2,474 of $4,561</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:6px 0;border-bottom:1px solid var(--line-soft)"><span><span class="bd wants" style="display:inline-block"></span> Wants</span><span class="mono">$0 of $1,017</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:6px 0"><span><span class="bd save" style="display:inline-block"></span> Saving</span><span class="mono">$0 of $1,918</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- floating pill (real app) -->
+    <span style="position:absolute;right:-1px;top:300px;width:34px;height:34px;border-radius:50% 0 0 50%;background:#23201B;display:grid;place-items:center;color:#fff;font-size:13px;z-index:2">▤</span>
+    <span class="dot-pin mid" style="left:calc(50% + 150px);top:150px" data-f="Duplicated totals">6</span>
+    <span class="dot-pin mid" style="right:38px;top:300px" data-f="Mystery pill">7</span>
+    <span class="dot-pin low" style="left:70px;top:355px" data-f="Repeated click-to-log noise">8</span>
+    <span class="dot-pin low" style="right:150px;top:60px" data-f="Log expense hard to reach on mobile">9</span>
+  </div>
+  <div class="frame-cap before"><b>▲ Current</b> — recreation of the live Track tab (the dark half-pill on the right edge is the real, unlabeled control)</div>
+
+  <div class="callouts" style="margin-top:26px;grid-template-columns:1fr 1fr;display:grid;gap:14px 32px">
+    <div class="callout"><span class="n mid">6</span><div><b>The KPI strip and "July at a glance" say the same thing twice.</b><p>"Income budgeted $8,432," and the Needs/Wants/Save/Give totals, appear in both the top strip and the right panel. Pick one home for each number. A cleaner split: keep the four headline KPIs up top; make the side panel a <b>bucket progress</b> summary (four bars) rather than a second table of the same figures.</p></div></div>
+    <div class="callout"><span class="n mid">7</span><div><b>The floating pill is a mystery.</b><p>An unlabeled dark half-circle icon pinned to the right edge is one of the least discoverable patterns in UI. If it toggles the summary panel, give it a label or a tooltip, or fold it into the layout. Icon-only, edge-anchored controls get missed.</p></div></div>
+    <div class="callout"><span class="n low">8</span><div><b>"click to log · 0%" repeats on every idle card.</b><p>Multiply that reminder across ~30 categories and it becomes visual static. Show the hint on hover/focus only, and let the empty state be quiet — the eye should go to the cards that have activity or are over budget.</p></div></div>
+    <div class="callout"><span class="n low">9</span><div><b>"Log expense" is the #1 action — treat it like it.</b><p>On desktop it's a top-right button; fine. On a phone, the single most frequent task should be a persistent thumb-reach <b>floating action button</b>, not a link that scrolls away. Your Log-expense modal itself is clean and well-built — it just needs a faster door.</p></div></div>
+  </div>
+  <div class="note"><b>What's genuinely good:</b> the per-category progress bars, the red over-budget state, the "accrued vs spent" fund cards, and the plain-language "Day 2 of 31 — 6% through the month" framing. This tab has the strongest information design in the app.</div>
+</div></section>
+
+<!-- ===== PLAN TAB ===== -->
+<section id="plan"><div class="wrap">
+  <p class="eyebrow">Tab 3 of 3 · The projector</p>
+  <h2>Plan</h2>
+  <p class="intro">A compound-growth projector with live sliders and milestone ETAs. Conceptually the most delightful tab — you drag a slider and watch "financial independence" move from 13 years to 11. The issue is purely layout balance.</p>
+
+  <div class="browser anno" id="planFig">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">ledger-budget-app-zeta.vercel.app</span></div>
+    <div class="app-mini">
+      <div class="tb">
+        <div class="lg"><span class="m"></span> Ledger</div>
+        <div class="nav"><span>Budget</span><span>Track</span><span class="on">Plan</span></div>
+        <div class="rt"><span class="yr">‹ 2026 ›</span><span>Export</span><span>Import</span><span style="color:var(--warn)">Reset</span><span class="av">M</span></div>
+      </div>
+      <div class="body">
+        <div class="phead">
+          <div><h3>Plan for what's <em>next</em></h3><div class="sub">See how your cash and long-term savings compound over time.</div></div>
+          <div class="ghostlinks"><span style="border:1px solid var(--line);border-radius:999px;padding:6px 12px">Reset to budget</span><span class="cta">Save projection</span></div>
+        </div>
+        <div class="kpi-row four">
+          <div class="kpi-c"><div class="l">Cash / month</div><div class="v">$112</div></div>
+          <div class="kpi-c"><div class="l">Long-term / month</div><div class="v">$2,306</div></div>
+          <div class="kpi-c"><div class="l">Projected net worth</div><div class="v">$1,293,723</div></div>
+          <div class="kpi-c"><div class="l">Growth from returns</div><div class="v">$586,563</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px">
+          <div class="card">
+            <h4 style="font-size:18px;margin:0 0 2px">Projected balance</h4>
+            <div style="color:var(--muted);font-size:11px;margin-bottom:10px">Cash: $112/mo @ 3% · Long-term: $2,306/mo @ 7.5%</div>
+            <svg viewBox="0 0 300 150" style="width:100%;height:150px">
+              <line x1="30" y1="10" x2="30" y2="130" stroke="var(--line)"/>
+              <line x1="30" y1="130" x2="295" y2="130" stroke="var(--line)"/>
+              <path d="M30,110 C120,95 210,60 292,25" fill="none" stroke="var(--accent)" stroke-width="2"/>
+              <path d="M30,110 C120,95 210,60 292,25 L292,130 L30,130 Z" fill="var(--accent)" opacity="0.09"/>
+              <circle cx="292" cy="25" r="3.5" fill="var(--accent)"/>
+              <text x="34" y="20" font-size="7" fill="var(--muted)" font-family="monospace">$2.0M</text>
+              <text x="34" y="128" font-size="7" fill="var(--muted)" font-family="monospace">$0</text>
+            </svg>
+            <div style="height:70px"></div>
+          </div>
+          <div style="display:grid;gap:9px">
+            <div class="card" style="padding:11px 13px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Cash savings / month</div><div style="font-family:var(--serif);font-size:20px">$112</div><div style="height:5px;background:var(--bg-soft);border-radius:3px;margin-top:6px"><div style="width:4%;height:100%;background:var(--accent);border-radius:3px"></div></div></div>
+            <div class="card" style="padding:11px 13px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Long-term / month</div><div style="font-family:var(--serif);font-size:20px">$2,306</div><div style="height:5px;background:var(--bg-soft);border-radius:3px;margin-top:6px"><div style="width:46%;height:100%;background:var(--accent);border-radius:3px"></div></div></div>
+            <div class="card" style="padding:11px 13px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Cash yield</div><div style="font-family:var(--serif);font-size:20px">3.00%</div><div style="height:5px;background:var(--bg-soft);border-radius:3px;margin-top:6px"><div style="width:30%;height:100%;background:var(--accent);border-radius:3px"></div></div></div>
+            <div class="card" style="padding:11px 13px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)">Long-term yield</div><div style="font-family:var(--serif);font-size:20px">7.50%</div><div style="height:5px;background:var(--bg-soft);border-radius:3px;margin-top:6px"><div style="width:50%;height:100%;background:var(--accent);border-radius:3px"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <span class="dot-pin mid" style="left:calc(50% - 40px);top:290px" data-f="Chart/controls imbalance">10</span>
+    <span class="hl mid" style="left:20px;bottom:24px;width:52%;height:74px"></span>
+  </div>
+  <div class="frame-cap before"><b>▲ Current</b> — the controls column runs much taller than the chart, leaving the dashed area empty as you scroll</div>
+
+  <div class="two" style="margin-top:26px">
+    <div class="callouts">
+      <div class="callout"><span class="n mid">10</span><div><b>The chart and the controls fall out of balance.</b><p>There are six-plus stacked slider cards on the right, but the chart card on the left is short — so scrolling down leaves a tall empty gutter beside the chart (dashed). Two good fixes: (a) make the chart card <b>sticky</b> so it stays in view while you drag sliders, or (b) put a compact chart + headline numbers on top and lay the controls out in a 2-column grid beneath.</p></div></div>
+    </div>
+    <div>
+      <div class="note" style="margin-top:0"><b>Keep exactly as-is:</b> the Milestones list (Emergency fund, House down payment, Financial independence) with live ETAs and "% by yr 10" is the emotional payoff of the whole app. It turns a spreadsheet into a story. If anything, surface a one-line version of it on the Budget tab too.</div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ===== MOBILE ===== -->
+<section id="mobile" style="background:linear-gradient(180deg,#FBF8F1,var(--bg))"><div class="wrap">
+  <p class="eyebrow">The desktop + mobile question</p>
+  <h2>Same Vercel build, two very different experiences</h2>
+  <p class="intro">Because there are no phone breakpoints and the viewport is set to <span class="mono">device-width</span>, your phone doesn't get a smaller app — it gets the <b>desktop</b> app, shrunk. Four KPI cards fight for ~90&nbsp;px each, the two-column layouts refuse to stack, and the budget grid demands sideways scrolling. On the right is the same three screens rebuilt as a phone-first layout. Nothing about the brand changes — only the arrangement.</p>
+
+  <div class="ba">
+    <div>
+      <div class="mob-wrap"><div class="phone">
+        <div class="notch"><i></i></div>
+        <div class="screen">
+          <!-- crammed desktop header -->
+          <div style="display:flex;align-items:center;gap:5px;padding:7px 8px;border-bottom:1px solid var(--line);font-size:8px;white-space:nowrap;overflow:hidden">
+            <span style="font-family:var(--serif);font-style:italic;font-size:11px">Ledger</span>
+            <span style="background:var(--ink);color:var(--bg);border-radius:999px;padding:2px 6px">Budget</span>
+            <span>Track</span><span>Plan</span>
+            <span style="border:1px solid var(--line);border-radius:999px;padding:2px 5px">2026</span>
+            <span>Export</span><span>Import</span><span style="color:var(--warn)">Rese…</span>
+          </div>
+          <div style="padding:10px 9px">
+            <div style="font-family:var(--serif);font-size:19px">2026 <em>cash budget</em></div>
+            <div style="color:var(--muted);font-size:8.5px;margin-bottom:9px">Estimate every dollar in and out.</div>
+            <!-- 4 tiny kpis -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px">
+              <div style="background:#fff;padding:6px 4px"><div style="font-size:5.5px;text-transform:uppercase;color:var(--muted);letter-spacing:.05em">An. inc</div><div style="font-family:var(--serif);font-size:12px;line-height:1">$101k</div></div>
+              <div style="background:#fff;padding:6px 4px"><div style="font-size:5.5px;text-transform:uppercase;color:var(--muted)">Gross</div><div style="font-family:var(--serif);font-size:12px;line-height:1">$107k</div></div>
+              <div style="background:#fff;padding:6px 4px"><div style="font-size:5.5px;text-transform:uppercase;color:var(--muted)">Outflow</div><div style="font-family:var(--serif);font-size:12px;line-height:1">$100k</div></div>
+              <div style="background:#fff;padding:6px 4px"><div style="font-size:5.5px;text-transform:uppercase;color:var(--muted)">Savings</div><div style="font-family:var(--serif);font-size:12px;line-height:1">$29k</div></div>
+            </div>
+            <!-- sheet overflowing to the right -->
+            <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;position:relative">
+              <div style="overflow:hidden">
+                <div style="min-width:520px">
+                  <div style="display:grid;grid-template-columns:90px repeat(7,54px) 60px;background:var(--bg-soft);font-size:7px;color:var(--muted);height:20px;align-items:center;text-transform:uppercase"><div style="padding-left:6px">Category</div><div style="text-align:center">Jan</div><div style="text-align:center">Feb</div><div style="text-align:center">Mar</div><div style="text-align:center">Apr</div><div style="text-align:center">May</div><div style="text-align:center">Jun</div><div style="text-align:center">Jul</div><div style="text-align:right;padding-right:5px">Annual</div></div>
+                  <div style="display:grid;grid-template-columns:90px repeat(7,54px) 60px;font-family:var(--mono);font-size:8px;height:22px;align-items:center;border-top:1px solid var(--line-soft)"><div style="padding-left:6px;font-family:var(--sans)">Salary</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:center">4600</div><div style="text-align:right;padding-right:5px">$55k</div></div>
+                  <div style="display:grid;grid-template-columns:90px repeat(7,54px) 60px;font-family:var(--mono);font-size:8px;height:22px;align-items:center;border-top:1px solid var(--line-soft)"><div style="padding-left:6px;font-family:var(--sans)">Rent</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:center">2100</div><div style="text-align:right;padding-right:5px">$25k</div></div>
+                  <div style="display:grid;grid-template-columns:90px repeat(7,54px) 60px;font-family:var(--mono);font-size:8px;height:22px;align-items:center;border-top:1px solid var(--line-soft)"><div style="padding-left:6px;font-family:var(--sans)">Retirement</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:center">1306</div><div style="text-align:right;padding-right:5px">$15k</div></div>
+                </div>
+              </div>
+              <div style="position:absolute;top:0;right:0;bottom:0;width:22px;background:linear-gradient(90deg,transparent,rgba(200,54,43,.18))"></div>
+            </div>
+            <div style="font-size:8px;color:var(--warn);margin-top:6px;text-align:center">← scroll sideways to see the rest · labels scroll away →</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap before"><b>▼ Current on a phone</b> — desktop layout, device-width viewport</div>
+    </div>
+
+    <div>
+      <div class="mob-wrap"><div class="phone">
+        <div class="notch"><i></i></div>
+        <div class="screen scrollable" style="padding-bottom:56px">
+          <!-- clean mobile header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line)">
+            <span style="font-family:var(--serif);font-style:italic;font-size:17px;display:flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:inset 0 0 0 2px var(--bg);outline:1px solid var(--accent)"></span>Ledger</span>
+            <div style="display:flex;align-items:center;gap:10px"><span style="border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:11px;font-family:var(--mono)">2026</span><span style="width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:10px">M</span><span style="color:var(--muted);font-size:16px">⋯</span></div>
+          </div>
+          <div style="padding:14px 14px">
+            <div style="font-family:var(--serif);font-size:24px">2026 <em>cash budget</em></div>
+            <div style="color:var(--muted);font-size:11px;margin-bottom:12px">Every dollar in and out, month by month.</div>
+            <!-- 2x2 kpis, roomy -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+              <div style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:11px 12px"><div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Annual income</div><div style="font-family:var(--serif);font-size:22px;line-height:1.1">$101,184</div></div>
+              <div style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:11px 12px"><div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Annual outflow</div><div style="font-family:var(--serif);font-size:22px;line-height:1.1">$100,366</div></div>
+              <div style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:11px 12px"><div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Annual savings</div><div style="font-family:var(--serif);font-size:22px;line-height:1.1;color:var(--save)">$29,834</div></div>
+              <div style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:11px 12px"><div style="font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)">Year-end wealth</div><div style="font-family:var(--serif);font-size:22px;line-height:1.1">$478,576</div></div>
+            </div>
+            <!-- month chips instead of 12 cols -->
+            <div style="display:flex;gap:6px;overflow:hidden;margin-bottom:10px"><span style="background:var(--ink);color:var(--bg);border-radius:999px;padding:4px 12px;font-size:11px">Jan</span><span style="border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11px;color:var(--ink-soft)">Feb</span><span style="border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11px;color:var(--ink-soft)">Mar</span><span style="border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11px;color:var(--muted)">Annual</span></div>
+            <!-- category rows: one month at a time, label always visible -->
+            <div style="border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line-soft)"><span style="display:flex;align-items:center;gap:8px;font-size:13px"><span class="bd needs"></span>Rent</span><span style="font-family:var(--mono);font-size:13px">$2,100</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line-soft)"><span style="display:flex;align-items:center;gap:8px;font-size:13px"><span class="bd wants"></span>Entertainment</span><span style="font-family:var(--mono);font-size:13px">$60</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line-soft)"><span style="display:flex;align-items:center;gap:8px;font-size:13px"><span class="bd save"></span>Retirement</span><span style="font-family:var(--mono);font-size:13px">$1,306</span></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 13px"><span style="display:flex;align-items:center;gap:8px;font-size:13px"><span class="bd give"></span>Charitable</span><span style="font-family:var(--mono);font-size:13px">$793</span></div>
+            </div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:8px;text-align:center">Tap a month chip to edit it · labels never scroll away</div>
+          </div>
+          <!-- bottom tab bar -->
+          <div style="position:absolute;left:0;right:0;bottom:0;height:52px;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;font-size:10px">
+            <span style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--accent);font-weight:600">▦<span>Budget</span></span>
+            <span style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted)">◷<span>Track</span></span>
+            <span style="width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:22px;margin-top:-18px;box-shadow:0 6px 16px rgba(0,0,0,.25)">＋</span>
+            <span style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted)">◈<span>Plan</span></span>
+            <span style="display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted)">⋯<span>More</span></span>
+          </div>
+        </div>
+      </div></div>
+      <div class="frame-cap after"><b>▼ Proposed phone layout</b> — same brand, rebuilt for the thumb</div>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:34px">
+    <div class="callouts">
+      <div class="callout"><span class="n low">✓</span><div><b>Stack the KPIs 2×2.</b><p>Four across becomes two rows of two, each figure now readable, using the one media query you'd add.</p></div></div>
+      <div class="callout"><span class="n low">✓</span><div><b>Trade the 12-column grid for a month switcher.</b><p>On a phone, show one month at a time via chips (Jan…Dec + Annual). The category label stays pinned on the left; you edit a single visible column. No sideways scrolling, no lost labels.</p></div></div>
+    </div>
+    <div class="callouts">
+      <div class="callout"><span class="n low">✓</span><div><b>Move navigation to a bottom bar + FAB.</b><p>Budget / Track / Plan / More as a thumb-reach bar; the central "＋" is Log expense from anywhere. Export/Import/Reset live under "More."</p></div></div>
+      <div class="callout"><span class="n low">✓</span><div><b>Let two-column layouts collapse to one.</b><p>Track cards, the summary panel, and Plan's chart-vs-controls each become a single stacked column below ~720&nbsp;px — a few <span class="mono">grid-template-columns:1fr</span> rules.</p></div></div>
+    </div>
+  </div>
+  <div class="note"><b>Effort reality check:</b> everything in the "after" phone is layout, not new features. One well-placed <span class="mono">@media (max-width:720px)</span> block plus the month-switcher for the sheet gets you ~80% of the way. The one thing CSS <i>can't</i> solve is data following the user between devices — that's the next section.</div>
+</div></section>
+
+<!-- ===== REDESIGN DETAILS ===== -->
+<section id="redesign"><div class="wrap">
+  <p class="eyebrow">Targeted redesigns</p>
+  <h2>Three fixes, shown before → after</h2>
+
+  <!-- header -->
+  <h3 style="font-size:22px;margin:8px 0 12px">1 · Tidy the top bar</h3>
+  <div class="ba" style="gap:20px">
+    <div>
+      <div class="browser"><div class="app-mini"><div class="tb" style="border-bottom:0">
+        <div class="lg"><span class="m"></span> Ledger</div>
+        <div class="nav"><span class="on">Budget</span><span>Track</span><span>Plan</span></div>
+        <div class="rt"><span class="yr">‹ 2026 ›</span><span>Export</span><span>Import</span><span style="color:var(--warn)">Reset</span><span class="av">M</span></div>
+      </div></div></div>
+      <div class="frame-cap before"><b>Before</b> — 3 utility links + destructive Reset all inline</div>
+    </div>
+    <div>
+      <div class="browser"><div class="app-mini"><div class="tb" style="border-bottom:0">
+        <div class="lg"><span class="m"></span> Ledger</div>
+        <div class="nav"><span class="on">Budget</span><span>Track</span><span>Plan</span></div>
+        <div class="rt"><span class="yr">‹ 2026 ›</span><span style="border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink)">Data ⌄</span><span class="av">M</span></div>
+      </div></div></div>
+      <div class="frame-cap after"><b>After</b> — Export/Import/Reset tuck into a "Data" menu; Reset gets a warning colour inside it. Fewer targets, no accidental resets.</div>
+    </div>
+  </div>
+
+  <!-- KPI numerals -->
+  <h3 style="font-size:22px;margin:30px 0 12px">2 · Make the numbers scannable</h3>
+  <div class="ba" style="gap:20px">
+    <div>
+      <div class="card" style="text-align:center;padding:26px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:8px">Annual outflow</div><div style="font-family:var(--serif);font-size:44px;line-height:1">$100,366</div></div>
+      <div class="frame-cap before"><b>Before</b> — Instrument Serif: elegant, but thin strokes and loose numerals slow comparison</div>
+    </div>
+    <div>
+      <div class="card" style="text-align:center;padding:26px"><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:8px">Annual outflow</div><div style="font-family:var(--mono);font-weight:500;font-size:40px;line-height:1;letter-spacing:-.01em">$100,366</div></div>
+      <div class="frame-cap after"><b>After</b> — Geist Mono, tabular figures line up column-to-column. Keep the serif for titles &amp; the hero — use it where it sings, not where it's read fast.</div>
+    </div>
+  </div>
+
+  <!-- contrast -->
+  <h3 style="font-size:22px;margin:30px 0 12px">3 · Lift the low-contrast text</h3>
+  <p style="color:var(--ink-soft);max-width:74ch;margin:0 0 16px">Secondary text uses <span class="mono">#8C8275</span> on the <span class="mono">#FAF6EE</span> background — about <b>3.0:1</b>, under the WCAG AA minimum of 4.5:1 for normal text. It's used everywhere labels, captions, "of $175", and "click to log" live. Darkening it one step keeps the quiet, warm feel while making it legible for everyone (and in sunlight, on a phone).</p>
+  <div class="ba" style="gap:20px">
+    <div>
+      <div class="card" style="padding:22px"><div style="color:#8C8275;font-size:13px">Day 2 of 31 — 6% through the month</div><div style="color:#8C8275;font-size:13px;margin-top:6px">$104 <span style="color:#C9BFA8">of $175</span> · click to log</div><div style="margin-top:12px;display:inline-block;font-family:var(--mono);font-size:11px;background:var(--bg-soft);border-radius:6px;padding:3px 8px;color:var(--muted)">#8C8275 · ~3.0:1 ✗</div></div>
+      <div class="frame-cap before"><b>Before</b></div>
+    </div>
+    <div>
+      <div class="card" style="padding:22px"><div style="color:#6B6153;font-size:13px">Day 2 of 31 — 6% through the month</div><div style="color:#6B6153;font-size:13px;margin-top:6px">$104 <span style="color:#9C927E">of $175</span> · click to log</div><div style="margin-top:12px;display:inline-block;font-family:var(--mono);font-size:11px;background:var(--bg-soft);border-radius:6px;padding:3px 8px;color:var(--ink-soft)">#6B6153 · ~4.6:1 ✓</div></div>
+      <div class="frame-cap after"><b>After</b> — one shade deeper clears AA; the mood is unchanged</div>
+    </div>
+  </div>
+
+  <!-- strategic sync -->
+  <div style="margin-top:38px;background:var(--ink);color:var(--bg);border-radius:14px;padding:28px 30px">
+    <p class="eyebrow" style="color:#A9C6B0">Strategic · beyond the UI</p>
+    <h3 style="font-size:26px;margin:0 0 10px;color:#fff">Data that follows the user across devices</h3>
+    <p style="color:#EDE7DA;max-width:76ch;margin:0 0 14px;font-size:15.5px">Everything above makes the phone <i>usable</i>. But today all data lives in one browser's <span class="mono" style="color:#D9CFBD">localStorage</span>. Edit your budget on the laptop and your phone won't see it unless you manually Export a JSON file and Import it on the other device. For a product whose whole promise is "check it on my phone, plan on my desktop," that's the deepest limitation — and it's a product decision, not a CSS one.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px">
+      <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:16px 18px"><b style="color:#fff">Keep it local (privacy-first)</b><p style="color:#D9CFBD;margin:6px 0 0;font-size:13.5px">Lean into "your data never leaves your device." Make Export/Import effortless (one tap, QR-to-phone handoff). Honest, differentiated, zero backend.</p></div>
+      <div style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:16px 18px"><b style="color:#fff">Add optional sync</b><p style="color:#D9CFBD;margin:6px 0 0;font-size:13.5px">A lightweight account + hosted database (you already have a Supabase project wired up) lets the same budget open on any device, and unlocks sharing a budget with a partner. Opt-in, so the privacy story survives.</p></div>
+    </div>
+    <p style="color:#B9AF9C;font-size:12.5px;margin:16px 0 0">Not a recommendation to build today — just the fork in the road that the "desktop + mobile" goal eventually meets. Worth deciding on deliberately.</p>
+  </div>
+</div></section>
+
+<!-- ===== ROADMAP ===== -->
+<section id="roadmap"><div class="wrap">
+  <p class="eyebrow">If you only do a few things</p>
+  <h2>A sequenced plan</h2>
+  <p class="intro">Ordered by return on effort. The first three are almost entirely CSS and would transform the mobile experience in an afternoon or two.</p>
+  <table class="road">
+    <thead><tr><th style="width:34px">#</th><th>Change</th><th>Where</th><th style="width:90px">Priority</th><th style="width:80px">Effort</th></tr></thead>
+    <tbody>
+      <tr><td class="p">1</td><td><b>Add a mobile breakpoint.</b> One <span class="mono">@media (max-width:720px)</span>: stack KPIs 2×2, collapse all two-column grids to one, wrap the header.</td><td>Global CSS</td><td><span class="chip now">Now</span></td><td>S</td></tr>
+      <tr><td class="p">2</td><td><b>Freeze the Category (and Annual) column</b> in the budget sheet with <span class="mono">position:sticky</span> so labels stay visible while scrolling months.</td><td>Budget</td><td><span class="chip now">Now</span></td><td>S</td></tr>
+      <tr><td class="p">3</td><td><b>Mobile nav: bottom tab bar + a "＋" FAB</b> for Log expense; move Export/Import/Reset into a "Data" / "More" menu.</td><td>Global</td><td><span class="chip now">Now</span></td><td>M</td></tr>
+      <tr><td class="p">4</td><td><b>Darken secondary text</b> from <span class="mono">#8C8275</span> → ~<span class="mono">#6B6153</span> to clear WCAG AA.</td><td>Global CSS</td><td><span class="chip now">Now</span></td><td>S</td></tr>
+      <tr><td class="p">5</td><td><b>Month-switcher for the sheet on phones</b> (chips: Jan…Dec + Annual) instead of a 12-column horizontal scroll.</td><td>Budget</td><td><span class="chip next">Next</span></td><td>M</td></tr>
+      <tr><td class="p">6</td><td><b>De-duplicate Track.</b> Keep the four KPIs up top; turn "at a glance" into four bucket <i>progress bars</i>, not a repeat of the same numbers.</td><td>Track</td><td><span class="chip next">Next</span></td><td>M</td></tr>
+      <tr><td class="p">7</td><td><b>Resolve Save vs autosave.</b> Replace the primary "Save" button with a quiet "All changes saved," or make Save create a named snapshot.</td><td>Budget / Plan</td><td><span class="chip next">Next</span></td><td>S</td></tr>
+      <tr><td class="p">8</td><td><b>Label or absorb the floating pill</b> on Track; make its purpose obvious.</td><td>Track</td><td><span class="chip next">Next</span></td><td>S</td></tr>
+      <tr><td class="p">9</td><td><b>Balance the Plan layout</b> — make the chart card sticky, or move controls into a grid beneath a compact chart.</td><td>Plan</td><td><span class="chip next">Next</span></td><td>S</td></tr>
+      <tr><td class="p">10</td><td><b>Reconsider serif for KPI figures</b> (Geist Mono for the numbers, serif for titles), and quiet the repeated "click to log · 0%".</td><td>Global</td><td><span class="chip later">Polish</span></td><td>S</td></tr>
+      <tr><td class="p">11</td><td><b>Decide the sync story</b> — polished local Export/Import vs optional account-based sync (Supabase).</td><td>Strategy</td><td><span class="chip later">Later</span></td><td>L</td></tr>
+    </tbody>
+  </table>
+  <div class="note"><b>Where I'd start:</b> #1–#4 together are perhaps a day of focused work and move four of the eight scorecard dimensions at once — mostly the ones dragging the average down. That's the fastest path from "3.1, desktop-only" to "a product I'd open on my phone."</div>
+</div></section>
+
+<div class="foot"><div class="wrap">
+  Prepared as a design &amp; UX review of Ledger · recreations built to scale from the live app and its own <span class="mono">styles.css</span> tokens · July 2026
+</div></div>
+</main>
+
+<script>
+const scores=[
+ {cat:"Visual design & brand",n:4.5,c:"var(--ok)",s:"Distinctive, warm, cohesive. A real point of view."},
+ {cat:"Information hierarchy",n:3.5,c:"var(--mid)",s:"Clear per screen; some duplicated numbers on Track."},
+ {cat:"Usability (desktop)",n:4.0,c:"var(--ok)",s:"Considered and calm; the sheet is dense but capable."},
+ {cat:"Responsive / mobile",n:1.5,c:"var(--hi)",s:"Essentially none — one media query in the whole app."},
+ {cat:"Accessibility (contrast)",n:2.5,c:"var(--mid)",s:"Secondary text sits under WCAG AA. One shade fixes it."},
+ {cat:"Navigation & IA",n:3.5,c:"var(--mid)",s:"Good 3-tab model; header crowds, no mobile pattern."},
+ {cat:"Data-entry efficiency",n:3.0,c:"var(--mid)",s:"12-column editing is heavy; good shortcuts exist."},
+ {cat:"Multi-device readiness",n:2.0,c:"var(--hi)",s:"localStorage only — no sync between phone and desktop."},
+];
+document.getElementById('scoreGrid').innerHTML=scores.map(s=>`
+ <div class="score"><div class="top"><span class="cat">${s.cat}</span><span class="stars">${'★'.repeat(Math.round(s.n))}${'☆'.repeat(5-Math.round(s.n))}</span></div>
+ <div class="num" style="color:${s.c}">${s.n.toFixed(1)}</div>
+ <div class="bar"><div style="width:${s.n/5*100}%;background:${s.c}"></div></div>
+ <small>${s.s}</small></div>`).join('');
+
+const findings=[
+ {n:1,sev:"hi",t:"No responsive design",e:"S",p:"The stylesheet has a single media query, and the viewport is device-width — so phones get the desktop layout crammed into ~390px. Since Vercel serves one build to all devices, this is every mobile visitor's experience."},
+ {n:2,sev:"hi",t:"No cross-device data sync",e:"L",p:"All data lives in one browser's localStorage. Using desktop + mobile means manually exporting and importing a JSON file. It undercuts the core multi-device promise."},
+ {n:3,sev:"mid",t:"Budget labels scroll away",e:"S",p:"The 14-column sheet scrolls horizontally, but the Category column isn't frozen — so you lose row names exactly when you need them. Freeze first + last columns."},
+ {n:4,sev:"mid",t:"Secondary text fails contrast",e:"S",p:"#8C8275 on cream is ~3:1, under WCAG AA (4.5:1), and it's used pervasively for labels and captions. Darken one step."},
+ {n:5,sev:"mid",t:"Destructive Reset as a plain link",e:"S",p:"Reset wipes everything and sits inline with Export/Import at equal visual weight. It confirms first (good) but belongs in an overflow menu with a warning treatment."},
+ {n:6,sev:"mid",t:"Track duplicates its own totals",e:"M",p:"The KPI strip and the 'at a glance' panel restate the same income and bucket figures. Consolidate — one home per number."},
+ {n:7,sev:"mid",t:"'Save' competes with autosave",e:"S",p:"The app autosaves every keystroke, yet a primary 'Save budget/projection' button implies edits weren't saved. Clarify the model."},
+ {n:8,sev:"low",t:"Unlabeled floating pill on Track",e:"S",p:"An icon-only, edge-anchored control is hard to discover. Label it or fold it into the layout."},
+ {n:9,sev:"low",t:"Plan chart/controls fall out of balance",e:"S",p:"A short chart card beside a tall stack of sliders leaves an empty gutter. Make the chart sticky or grid the controls beneath it."},
+ {n:10,sev:"low",t:"Serif numerals & repeated micro-copy",e:"S",p:"Instrument Serif is lovely but slows number-scanning; 'click to log · 0%' on every idle card adds visual static. Small polish, real gains."},
+];
+document.getElementById('findingList').innerHTML=findings.map(f=>`
+ <div class="finding"><div class="pin ${f.sev}">${f.n}</div>
+ <div><h4>${f.t}</h4><p>${f.p}</p></div>
+ <div class="tags"><span class="tag ${f.sev}">${f.sev==='hi'?'High impact':f.sev==='mid'?'Medium':'Polish'}</span><span class="tag eff">Effort ${f.e}</span></div></div>`).join('');
+
+// pin tooltips
+document.querySelectorAll('.dot-pin').forEach(p=>{
+  p.title=p.getAttribute('data-f')||'';
+  p.addEventListener('click',()=>{p.style.transform='scale(1.35)';setTimeout(()=>p.style.transform='',260);});
+});
+// smooth anchor scroll
+document.querySelectorAll('.tocbar a').forEach(a=>a.addEventListener('click',e=>{
+  const el=document.querySelector(a.getAttribute('href'));if(el){e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});}
+}));
+</script>
+</body>
+</html>

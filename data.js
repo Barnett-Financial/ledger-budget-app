@@ -97,6 +97,31 @@ function isDebtPayment(name) {
   return /debt|interest/i.test(name || '');
 }
 
+/* ------------------------------------------------------------------ */
+/* Flow classification (Fix 3.1)                                       */
+/* A category may override the name-based routing via c.flow:          */
+/*   'auto'  → fall back to the name regex (default)                   */
+/*   'cash'  → Cash savings                                            */
+/*   'lt'    → Long-term investing                                     */
+/*   'debt'  → Debt payment                                            */
+/* The explicit override always wins; regex is only the fallback.     */
+function catFlow(c) { return (c && c.flow) || 'auto'; }
+
+function catIsDebtPayment(c) {
+  const f = catFlow(c);
+  if (f === 'debt') return true;
+  if (f === 'auto') return isDebtPayment(c && c.name);
+  return false;               /* explicitly routed to cash/lt → not debt */
+}
+
+function catIsLtSavings(c) {
+  const f = catFlow(c);
+  if (f === 'lt')   return true;
+  if (f === 'cash') return false;
+  if (f === 'debt') return false;
+  return isLtSavings(c && c.name);
+}
+
 /* --- Number helpers --- */
 
 function sum(arr) { return arr.reduce((a, b) => a + (+b || 0), 0); }
@@ -145,4 +170,5 @@ Object.assign(window, {
   STARTER_DATA, BUCKETS, BUCKET_ORDER, BUCKET_CYCLE,
   sum, fmt, fmtAccurate, pct, pct1, uid, migrateData,
   isLtSavings, isDebtPayment,
+  catFlow, catIsDebtPayment, catIsLtSavings,
 });
