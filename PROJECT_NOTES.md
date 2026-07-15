@@ -1,7 +1,13 @@
 # Ledger Budget App — Project Notes
 
 Live URL: https://ledger-budget-app-zeta.vercel.app
-Repo: static site — `index.html` (React via Babel CDN, unpkg) + `data.js` + `styles.css`, no build step. Auto-deploys to Vercel from GitHub `main`.
+Repo: static site, no build step. Auto-deploys to Vercel from GitHub `main`.
+Architecture (as of 2026-07-15): `index.html` is now just a **shell** (head + `<div id="root">` + script tags). React (via Babel CDN, unpkg) components live in separate `<script type="text/babel" src="js/*.jsx">` files. `data.js` (plain JS, defines window globals) still loads first. Load order in `index.html`: `data.js` → `js/shared.jsx` → `js/budget.jsx` → `js/track.jsx` → `js/plan.jsx` → `js/app.jsx` (mount, loads LAST). Top-level `function` declarations stay global across the text/babel scripts, so no import/export is used. Because component files load via `src=`, the app must be served over http (Vercel is fine); opening `index.html` from `file://` will fail to fetch the jsx.
+  - `js/shared.jsx` — Kpi, NumberInput, Info
+  - `js/budget.jsx` — CSV helpers + BudgetScreen, Sheet, AllocationSummary, LegItem, Rule, RowSettingsModal, DebtRateModal, GivingGoalModal
+  - `js/track.jsx` — TrackScreen, TransactionList, CategoryCombobox, LogExpenseModal, CategoryCard
+  - `js/plan.jsx` — PlanScreen, AddMilestoneModal, Slider, ProjectionChart, formatEta/niceCeil/abbrev
+  - `js/app.jsx` — App, AuthScreen, Root, ReactDOM mount
 
 ## Environment quirk — read before editing
 
@@ -72,3 +78,25 @@ Jason commits via GitHub Desktop.
   (forced `matchMedia` to mobile, rendered `STARTER_DATA`, checked for JS
   errors and the specific fixed strings/classes) — zero errors, all checks
   passed.
+
+## 2026-07-15 — Refactor: split index.html into modular jsx files
+
+- Pure refactor, **no behavior change**. `index.html` went from ~2,160 lines
+  (four inline `<script type="text/babel">` blocks holding 23 components) to a
+  45-line shell that loads `js/shared.jsx`, `js/budget.jsx`, `js/track.jsx`,
+  `js/plan.jsx`, `js/app.jsx` via `<script type="text/babel" src="...">`. See
+  the Architecture note near the top for the load order and which component
+  lives in which file. Kept in-browser Babel — no Vite/webpack/bundler added.
+- Supabase cloud login untouched: the head still has the supabase-js CDN tag +
+  `window.sb`/`window.LEDGER_SB` config; `App({ session })`, `AuthScreen`,
+  `Root`, and the `<Root />` mount are all verbatim in `js/app.jsx`.
+- This session the bash mount was NOT stale (verified: `wc -l`=2162 matched the
+  Read tool, tail clean, script tags 10/10, 26 line-anchors matched), so the
+  split was done by slicing the intact `index.html` with an asserting Python
+  script — guarantees verbatim content, no transcription/truncation risk.
+- Verification: all 5 jsx Babel-parse cleanly; a full jsdom + real React render
+  boots the app with zero JS errors and renders Budget (68k chars), Track, and
+  Plan screens; no `import`/`export` introduced; `data.js` and `styles.css`
+  unchanged. Windows-path Read confirmed `index.html` shell and `js/app.jsx`.
+- Backups this session (verified byte-identical via bash `cp`, mount was clean):
+  `index.2026-07-15-prerefactor.backup.html`, `styles.2026-07-15-prerefactor.backup.css`.
