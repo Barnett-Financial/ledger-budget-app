@@ -315,20 +315,25 @@ input, select  { font: inherit; color: inherit; }
   align-self: center;
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--muted);
+  background-color: var(--muted);
   cursor: pointer;
   margin: 0 auto;
   transition: transform 0.1s;
   flex-shrink: 0;
 }
+/* Note: these use background-color (not the `background` shorthand) on purpose —
+   the mobile tap-target rule below sets background-clip:content-box, and a later
+   `background:` shorthand declaration resets background-clip back to border-box,
+   which was making every colored dot paint its whole oversized touch target
+   instead of just the 8px dot (the "circles are too big" bug). */
 .bucket-dot:hover { transform: scale(1.4); }
-.bucket-dot.needs { background: var(--needs); }
-.bucket-dot.wants { background: var(--wants); }
-.bucket-dot.save  { background: var(--save); }
-.bucket-dot.give  { background: var(--give); }
-.bucket-dot.unalloc { background: transparent; border: 1px dashed var(--muted); }
-.bucket-dot.inc   { background: var(--ink); cursor: default; }
-.bucket-dot.empty { background: transparent; border: 1px dashed var(--muted); opacity: 0.5; cursor: default; }
+.bucket-dot.needs { background-color: var(--needs); }
+.bucket-dot.wants { background-color: var(--wants); }
+.bucket-dot.save  { background-color: var(--save); }
+.bucket-dot.give  { background-color: var(--give); }
+.bucket-dot.unalloc { background-color: transparent; border: 1px dashed var(--muted); }
+.bucket-dot.inc   { background-color: var(--ink); cursor: default; }
+.bucket-dot.empty { background-color: transparent; border: 1px dashed var(--muted); opacity: 0.5; cursor: default; }
 
 .name {
   padding: 0 6px 0 12px;
@@ -521,17 +526,18 @@ input, select  { font: inherit; color: inherit; }
 .alloc-rules {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 8px 20px;
   margin-top: 22px;
   padding-top: 18px;
   border-top: 1px solid var(--line-soft);
 }
 .rule {
-  display: flex; align-items: baseline; gap: 10px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
   font-size: 12.5px;
   color: var(--ink-soft);
+  padding: 6px 0;
 }
-.rule .lhs { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rule .lhs { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
 .rule .lhs span { white-space: nowrap; }
 .rule .lhs small { color: var(--muted); font-size: 11px; }
 .rule .rhs {
@@ -539,9 +545,25 @@ input, select  { font: inherit; color: inherit; }
   font-variant-numeric: tabular-nums;
   font-size: 14px;
   font-weight: 600;
+  flex: 0 0 auto;
 }
 .rule .rhs.ok { color: var(--save); }
 .rule .rhs.warn { color: var(--warn); }
+.rule .rhs.neutral { color: var(--muted); }
+.goal-pill {
+  align-self: flex-start;
+  margin-top: 1px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--give);
+  background: rgba(91,58,140,0.08);
+  border: 1px solid rgba(91,58,140,0.25);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.goal-pill:hover { background: rgba(91,58,140,0.14); }
 
 /* ----------------------- Track screen ---------------------------- */
 
@@ -879,6 +901,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
 }
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 22px;
@@ -1051,7 +1074,9 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   /* collapse two-column grids to one */
   .track-grid, .plan-grid, .cat-grid { grid-template-columns: 1fr; }
   .alloc-legend { grid-template-columns: repeat(2, 1fr); }
-  .alloc-rules  { grid-template-columns: 1fr; }
+  .alloc-rules  { grid-template-columns: 1fr; gap: 0; }
+  .alloc-rules .rule { border-top: 1px solid var(--line-soft); }
+  .alloc-rules .rule:first-child { border-top: none; }
   .month-summary { position: static; }    /* don't pin on mobile */
 
   /* (3) swap desktop data actions for bottom nav + fab */
@@ -1092,38 +1117,70 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   .sheet-toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
   .sheet-toolbar .right { display: none; }
   .month-chips {
-    display: flex; flex-wrap: wrap; gap: 6px;
+    display: flex;
     margin: 2px 0 12px;
   }
-  .month-chips button {
-    padding: 7px 12px;
-    border-radius: 999px;
+  .month-nav {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+  }
+  .month-select {
+    flex: 1;
+    min-height: 44px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 8px 30px 8px 14px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+    text-align: center;
+    text-align-last: center;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236B6153' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .month-arrow {
+    flex: 0 0 44px;
+    min-height: 44px;
+    border-radius: var(--r-md);
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink-soft);
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
+    font-size: 18px;
   }
-  .month-chips button.active {
-    background: var(--ink); color: var(--bg); border-color: var(--ink);
-  }
+  .month-arrow:active { background: var(--bg-soft); }
 
-  /* keep frozen columns aligned to the narrower mobile grid (22px corners) */
-  .sheet-scroll .row > *:nth-child(2)      { left: 22px; }
-  .sheet-scroll .row > *:nth-last-child(2) { right: 22px; }
+  /* keep frozen columns aligned to the narrower mobile grid corners
+     (18px dot column, 30px delete column — see Sheet()'s mobile grid-template) */
+  .sheet-scroll .row > *:nth-child(2)      { left: 18px; }
+  .sheet-scroll .row > *:nth-last-child(2) { right: 30px; }
 
   /* (4.4) don't pin the plan chart on a single-column layout */
   .plan-grid > .chart-card { position: static; }
 
-  /* (5.3) gear & delete are hover-only on desktop — reveal them and give a
-     ≥44px hit area on touch. Negative margin keeps the row layout unchanged. */
-  .row-gear, .row-del {
+  /* (5.3) gear & delete are hover-only on desktop — reveal them on touch.
+     row-del sits in its own 30px sticky grid column (the last one), so it's
+     sized to match that column exactly — no negative margin, so it can no
+     longer spill left and cover the annual amount next to it. row-gear lives
+     inline inside the flexible name cell instead, so it's kept narrow (24px)
+     to leave room for the category/income name text, just made full-row-height
+     for an easy tap. */
+  .row-gear {
     opacity: 0.55;
-    width: 44px; height: 44px;
-    flex: 0 0 44px;
-    margin: -12px;
+    width: 24px; height: 44px;
+    flex: 0 0 24px;
+    margin: 0;
   }
-  .row.cat .row-del, .row.income .row-del, .row.group .row-del { margin-left: -22px; }
+  .row-del {
+    opacity: 0.55;
+    width: 30px; height: 44px;
+    margin: 0;
+  }
   .gear-hint .row-gear { opacity: 0.7; animation: gearPulse 1.6s ease-in-out 3; }
 
   /* (5.3) enlarge the bucket-dot tap area to ≥32px while keeping the 8px dot */
@@ -1134,8 +1191,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
     background-clip: content-box;
   }
 
-  /* (3.3) touch targets ≥44px: month chips, sheet input rows, year arrows, modal close */
-  .month-chips button { min-height: 44px; padding: 10px 14px; }
+  /* (3.3) touch targets ≥44px: month picker, sheet input rows, year arrows, modal close */
   .sheet-scroll .row.cat, .sheet-scroll .row.income { height: auto; min-height: 44px; }
   .year-pill button { width: 40px; height: 40px; }
   .modal-close { width: 40px; height: 40px; font-size: 22px; }

@@ -73,7 +73,6 @@ function BudgetScreen({ data, setData }) {
   const [saved,              setSaved]              = React.useState(false);
   const [showInstructions,   setShowInstructions]   = React.useState(false);
   const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
-  const [showGivingGoalModal, setShowGivingGoalModal] = React.useState(false);
   const [settingsRow,        setSettingsRow]        = React.useState(null);
   /* Fix 2.3: pulse the ⚙ gear on first mobile run so it's discoverable */
   const [gearHint,           setGearHint]           = React.useState(
@@ -221,7 +220,6 @@ function BudgetScreen({ data, setData }) {
   const setBeginningLongTerm  = (v) => setData(prev => ({ ...prev, beginningLongTerm:  v }));
   const setBeginningDebt      = (v) => setData(prev => ({ ...prev, beginningDebt:      v }));
   const setDebtInterestRate   = (v) => setData(prev => ({ ...prev, debtInterestRate:   v }));
-  const setGivingGoal         = (v) => setData(prev => ({ ...prev, givingGoalPct:      v }));
   /* Fix #1: "Fill across from Jan" skips rows set to manual fill (e.g. one-time bonus). */
   const copyJan  = () => setData(prev => ({ ...prev, income: prev.income.map(r => r.fillMode === 'manual' ? r : ({ ...r, monthly: arr12(r.monthly[0]) })), groups: prev.groups.map(g => ({ ...g, cats: g.cats.map(c => c.fillMode === 'manual' ? c : ({ ...c, monthly: arr12(c.monthly[0]) })) })) }));
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
@@ -347,7 +345,6 @@ function BudgetScreen({ data, setData }) {
         groupTotals={groupTotals} groups={data.groups}
         netAnnual={netAnnual} grossIncomeAnnual={grossIncomeAnnual}
         retHsaAnnual={retHsaAnnual} otherDeductAnnual={otherDeductAnnual} payrollActive={payrollActive}
-        givingGoalPct={data.givingGoalPct} onGivingGoalClick={() => setShowGivingGoalModal(true)}
       />
 
       <div className="sheet-toolbar">
@@ -382,22 +379,13 @@ function BudgetScreen({ data, setData }) {
       </div>
 
       <div className="month-chips">
-        <div className="month-nav">
-          <button className="month-arrow" aria-label="Previous month"
-            onClick={() => { setMobileAnnual(false); setFocusMonth((focusMonth + 11) % 12); }}>&#8249;</button>
-          <select className="month-select"
-            value={mobileAnnual ? 'annual' : String(focusMonth)}
-            onChange={e => {
-              const v = e.target.value;
-              if (v === 'annual') setMobileAnnual(true);
-              else { setMobileAnnual(false); setFocusMonth(parseInt(v, 10)); }
-            }}>
-            {MONTHS_LONG.map((mo, i) => <option key={i} value={i}>{mo}</option>)}
-            <option value="annual">Annual (full year)</option>
-          </select>
-          <button className="month-arrow" aria-label="Next month"
-            onClick={() => { setMobileAnnual(false); setFocusMonth((focusMonth + 1) % 12); }}>&#8250;</button>
-        </div>
+        {MONTHS.map((mo, i) => (
+          <button key={i}
+            className={(!mobileAnnual && focusMonth === i) ? 'active' : ''}
+            onClick={() => { setMobileAnnual(false); setFocusMonth(i); }}>{mo}</button>
+        ))}
+        <button className={mobileAnnual ? 'active' : ''}
+          onClick={() => setMobileAnnual(true)}>Annual</button>
       </div>
 
       <div className={'sheet-wrap' + (gearHint ? ' gear-hint' : '')}>
@@ -437,14 +425,6 @@ function BudgetScreen({ data, setData }) {
           currentRate={data.debtInterestRate || 0}
           onSave={setDebtInterestRate}
           onClose={() => setShowDebtRateModal(false)}
-        />
-      )}
-
-      {showGivingGoalModal && (
-        <GivingGoalModal
-          currentGoal={data.givingGoalPct}
-          onSave={setGivingGoal}
-          onClose={() => setShowGivingGoalModal(false)}
         />
       )}
 
@@ -493,11 +473,8 @@ function Sheet(props) {
 
   const n  = visibleMonths.length;
   const monthCols = n > 0 ? 'repeat(' + n + ', minmax(64px, 1fr)) ' : '';
-  /* Mobile corners: 18px dot / 80px annual / 30px delete-icon column — the
-     delete column is wider than the dot column (row-del needs real tap room
-     and must not overlap the annual amount to its left; see styles.css). */
   const ct = isMobile
-    ? '18px minmax(112px, 1fr) ' + monthCols + '80px 30px'
+    ? '22px minmax(112px, 1fr) ' + monthCols + '84px 22px'
     : '28px 224px repeat(' + n + ', minmax(70px, 1fr)) 92px 28px';
   const rs = { gridTemplateColumns: ct };
 
@@ -512,8 +489,8 @@ function Sheet(props) {
       <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Cash Savings' : 'Beginning Cash Savings'}
-          {!isMobile && <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planCashYield||0).toFixed(1)}% yield</span>}
+          Beginning Cash Savings
+          <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planCashYield||0).toFixed(1)}% yield</span>
           <Info label="About beginning cash"
             text="Your cash/savings balance on Jan 1. Editable in January only — later months are computed, compounding at the Cash Yield from the Plan tab, plus cash-savings categories each month." />
         </div>
@@ -528,8 +505,8 @@ function Sheet(props) {
       <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Long-term Invest' : 'Beginning Long-term Invest'}
-          {!isMobile && <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planLtYield||0).toFixed(1)}% yield</span>}
+          Beginning Long-term Invest
+          <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planLtYield||0).toFixed(1)}% yield</span>
           <Info label="About beginning long-term balance"
             text="Your long-term investment balance on Jan 1. Editable in January only — later months compound at the Long-term Yield, plus retirement/long-term categories and any pretax 401(k)/HSA each month." />
         </div>
@@ -544,7 +521,7 @@ function Sheet(props) {
       <div className="row balance begin" style={{ ...rs, borderBottom:'1px solid var(--line)' }}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Debt' : 'Beginning Debt'}
+          Beginning Debt
           <button
             onClick={onDebtRateClick}
             title="Set debt interest rate"
@@ -701,7 +678,7 @@ function Sheet(props) {
   );
 }
 
-function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups, netAnnual = 0, grossIncomeAnnual = 0, retHsaAnnual = 0, otherDeductAnnual = 0, payrollActive = false, givingGoalPct, onGivingGoalClick }) {
+function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups, netAnnual = 0, grossIncomeAnnual = 0, retHsaAnnual = 0, otherDeductAnnual = 0, payrollActive = false }) {
   /* Fix 4.2: when payroll deductions are set, the WHOLE component uses gross as
      the denominator and shows pretax dollars as their own bar segments, so the
      bar, legend, and rules all share one baseline (gross). Without deductions
@@ -719,11 +696,6 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
   const savingsRateNum = saveWithNet + retHsaAnnual;   /* pretax 401k/HSA count as saving */
   const savingRate     = savingsRateNum / denom;
   const givingRate     = bucketAnnual.give / denom;
-  /* Giving has no universal rule of thumb like Housing/Savings do, so it only
-     turns red/green once the user sets their own goal (⚙ pill below). With no
-     goal set it stays neutral instead of defaulting to a misleading red. */
-  const hasGivingGoal  = givingGoalPct != null && givingGoalPct !== '';
-  const givingOk       = hasGivingGoal ? givingRate >= (givingGoalPct / 100) : null;
   return (
     <div className="alloc">
       <div className="alloc-head">
@@ -755,14 +727,7 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
       <div className="alloc-rules">
         <Rule label="Housing"      sub={payrollActive ? 'rule of thumb: under 30% of gross' : 'rule of thumb: under 30% of income'} val={pct1(housingGroup ? housingGroup.annual : 0, denom)} ok={housingPct <= 0.30} />
         <Rule label="Savings rate" sub={payrollActive ? 'rule of thumb: 15% or more (of gross)' : 'rule of thumb: 15% or more'} val={pct1(savingsRateNum, denom)} ok={savingRate >= 0.15} />
-        <Rule label="Giving"
-          sub={hasGivingGoal ? 'your goal: ' + givingGoalPct + '% or more' : 'no goal set yet'}
-          val={pct1(bucketAnnual.give, denom)} ok={givingOk}
-          goalBtn={
-            <button type="button" className="goal-pill" onClick={onGivingGoalClick}>
-              {hasGivingGoal ? 'Edit goal' : 'Set a giving goal'}
-            </button>
-          } />
+        <Rule label="Giving"       val={pct1(bucketAnnual.give, denom)} ok={givingRate >= 0.10} />
       </div>
     </div>
   );
@@ -777,16 +742,11 @@ function LegItem({ dot, label, amt, p, avg }) {
     </div>
   );
 }
-function Rule({ label, sub, val, ok, goalBtn }) {
-  const state = ok === null || ok === undefined ? 'neutral' : (ok ? 'ok' : 'warn');
+function Rule({ label, sub, val, ok }) {
   return (
     <div className="rule">
-      <div className="lhs">
-        <span>{label}</span>
-        {sub && <small>{sub}</small>}
-        {goalBtn}
-      </div>
-      <div className={'rhs ' + state}>{val}</div>
+      <div className="lhs"><span>{label}</span>{sub && <small>{sub}</small>}</div>
+      <div className={'rhs ' + (ok ? 'ok' : 'warn')}>{val}</div>
     </div>
   );
 }
@@ -1022,41 +982,6 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
           Used to accrue monthly interest on your Beginning Debt balance. Categories named with "debt" or "interest" automatically reduce the balance each month.
         </p>
         <div className="modal-actions">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn primary" onClick={handleSave}>Save</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GivingGoalModal({ currentGoal, onSave, onClose }) {
-  const [goal, setGoal] = React.useState(currentGoal != null ? String(currentGoal) : '');
-  const handleSave = () => {
-    const g = parseFloat(goal);
-    if (!isNaN(g) && g >= 0 && g <= 100) onSave(g);
-    else onSave(null);
-    onClose();
-  };
-  const handleClear = () => { onSave(null); onClose(); };
-  return (
-    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
-        <div className="modal-head">
-          <h2>Giving goal</h2>
-          <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
-        </div>
-        <div className="form-field">
-          <label>Target giving (% of income)</label>
-          <input type="number" inputMode="decimal" className="form-input" value={goal}
-            onChange={e => setGoal(e.target.value)}
-            min="0" max="100" step="0.5" autoFocus placeholder="e.g. 10" />
-        </div>
-        <p style={{ fontSize:12.5, color:'var(--muted)', margin:'-4px 0 16px' }}>
-          There's no universal rule of thumb for giving the way there is for housing or savings — set whatever target fits your own goals. The Giving row above turns green once you're at or above it.
-        </p>
-        <div className="modal-actions">
-          {currentGoal != null && <button className="btn" onClick={handleClear}>Clear goal</button>}
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleSave}>Save</button>
         </div>
