@@ -1206,53 +1206,53 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   /* Page action buttons wrap instead of forcing a 700px-wide row. */
   .page-head .actions { flex-wrap: wrap; }
   .btn {
-    min-height: 44px;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  .form-input { min-height: 44px; }
-  .control input[type="range"] { height: 44px; }
-
-  /* KPI numbers sized for half-width cards; never overflow the cell. */
-  .kpi { padding: 14px 16px; }
-  .kpi .val { font-size: 25px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  /* Allocation card: reclaim horizontal space. */
-  .alloc { padding: 18px 16px; }
-  .leg .amt { font-size: 20px; }
-
-  /* Footer notes stack instead of squeezing side by side. */
-  .foot-note { flex-direction: column; gap: 4px; }
-
-  /* Transaction list: two-line cards instead of a 430px-wide 5-column table.
-     Children in DOM order: date, note, category, amount, delete. */
-  .tx-head { display: none; }
-  .tx-row {
-    grid-template-columns: 1fr auto 44px;
-    grid-template-rows: auto auto;
-    height: auto;
-    padding: 8px 12px;
-    row-gap: 2px; column-gap: 8px;
-  }
-  .tx-row > :nth-child(3) { grid-column: 1; grid-row: 1; }                    /* category */
-  .tx-row > :nth-child(4) { grid-column: 2; grid-row: 1; }                    /* amount   */
-  .tx-row > :nth-child(1) { grid-column: 1; grid-row: 2; font-size: 11px; }   /* date     */
-  .tx-row > :nth-child(2) {                                                   /* note     */
-    grid-column: 2; grid-row: 2;
-    justify-self: end; text-align: right;
-    font-size: 11.5px; color: var(--muted);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    max-width: 44vw;
-  }
-  .tx-row > :nth-child(5) {                                                   /* delete ✕ */
-    grid-column: 3; grid-row: 1 / span 2;
-    width: 44px; height: 44px;
-    display: grid; place-items: center;
-  }
-
-  /* Milestones: let the % column size itself. */
-  .milestone-row { gap: 10px; }
-  .milestone-row .ms-pct { width: auto; }
-
-  /* Bigger touch hit for the ⓘ info dots (visual size unchanged-ish). */
-  .info-tip { width: 32px; height: 32px; margin: -7px -4px; font-size: 13px; }
+    min
+/* ------------------------------------------------------------------
+   Auth screen (Supabase per-person login) — added 2026-07-14
+------------------------------------------------------------------ */
+.auth-wrap {
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--bg);
 }
+.auth-card {
+  width: 100%; max-width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 28px 26px 22px;
+  box-shadow: 0 8px 30px rgba(28,24,20,.08);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.auth-loading { align-items: center; text-align: center; color: var(--muted); }
+.auth-brand { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.auth-brand .brand-mark {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); display: inline-block;
+}
+.auth-brand .brand-name {
+  font-family: var(--serif); font-size: 22px; color: var(--ink); letter-spacing: .3px;
+}
+.auth-title { margin: 6px 0 0; font-family: var(--serif); font-size: 26px; font-weight: 400; color: var(--ink); }
+.auth-sub   { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.auth-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--ink-soft); }
+.auth-field input {
+  font-family: var(--sans); font-size: 15px;
+  padding: 10px 12px; color: var(--ink);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md); outline: none;
+}
+.auth-field input:focus { border-color: var(--accent); background: var(--surface); }
+.auth-submit { margin-top: 6px; width: 100%; justify-content: center; }
+.auth-msg {
+  font-size: 12.5px; color: var(--wants);
+  background: rgba(164,59,53,.08); border: 1px solid rgba(164,59,53,.2);
+  border-radius: var(--r-sm); padding: 8px 10px;
+}
+.auth-switch {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--sans); font-size: 12.5px; color: var(--accent);
+  padding: 4px; margin-top: 2px; text-align: center;
+}
+.auth-switch:hover { text-decoration: underline; }

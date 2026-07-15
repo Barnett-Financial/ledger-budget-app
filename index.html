@@ -14,6 +14,20 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+  <!-- Cloud sync: per-person login + private budgets (Supabase). Keys here are publishable/safe. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.LEDGER_SB = {
+      url: 'https://bmhzvokxpglsdcrdbmra.supabase.co',
+      key: 'sb_publishable_RJt0kYtW87BaHLEglQxkaw_egxReKyT'
+    };
+    try {
+      window.sb = (window.supabase && window.supabase.createClient)
+        ? window.supabase.createClient(window.LEDGER_SB.url, window.LEDGER_SB.key)
+        : null;
+    } catch (_) { window.sb = null; }
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -1886,7 +1900,7 @@ function ProjectionChart({ series, years }) {
 
   <script type="text/babel">
 /* ---- App shell ---- */
-function App() {
+function App({ session }) {
   /* Fix 1.1: remember the active tab and viewed month across refreshes. */
   const [screen,   setScreen]   = React.useState(() => {
     try { const s = localStorage.getItem('ledger.ui.screen'); if (['budget','track','plan'].includes(s)) return s; } catch (_) {}
@@ -1911,6 +1925,45 @@ function App() {
   }, [data]);
   React.useEffect(() => { try { localStorage.setItem('ledger.ui.screen', screen); } catch (_) {} }, [screen]);
   React.useEffect(() => { try { localStorage.setItem('ledger.ui.month', String(monthIdx)); } catch (_) {} }, [monthIdx]);
+
+  /* ---- Cloud sync (Supabase): load THIS user's budget, then keep it saved to the cloud. ----
+     localStorage above still runs as an instant, offline fallback cache. */
+  const cloudReady = React.useRef(false);
+  const saveTimer  = React.useRef(null);
+  const userId = (session && session.user) ? session.user.id : null;
+
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!window.sb || !userId) { cloudReady.current = true; return; }
+    cloudReady.current = false;
+    (async () => {
+      try {
+        const { data: row, error } = await window.sb
+          .from('ledger_state').select('data').eq('user_id', userId).maybeSingle();
+        if (cancelled) return;
+        if (error) console.warn('Ledger cloud load:', error.message);
+        if (row && row.data && row.data.groups) {
+          setData(migrateData(row.data));            // cloud is the source of truth
+        } else {
+          /* First sign-in on this account: seed the cloud from whatever is here now. */
+          await window.sb.from('ledger_state')
+            .upsert({ user_id: userId, data, updated_at: new Date().toISOString() });
+        }
+      } catch (e) { console.warn('Ledger cloud load failed:', e); }
+      finally { if (!cancelled) cloudReady.current = true; }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  React.useEffect(() => {
+    if (!window.sb || !userId || !cloudReady.current) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      window.sb.from('ledger_state')
+        .upsert({ user_id: userId, data, updated_at: new Date().toISOString() })
+        .then(({ error }) => { if (error) console.warn('Ledger cloud save:', error.message); });
+    }, 800);
+  }, [data, userId]);
 
   /* Fix 2.2: one-time notice that Ledger keeps a single budget across years. */
   const changeYear = (delta) => {
@@ -1952,6 +2005,8 @@ function App() {
       setData({ ...STARTER_DATA, year: new Date().getFullYear() });
   };
 
+  const signOut = () => { if (window.sb) window.sb.auth.signOut(); };
+
   const initials = (data.name || 'Me').trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || 'ME';
 
   return (
@@ -1976,6 +2031,7 @@ function App() {
             <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
             <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
             <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
+            {session && <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={signOut}>Sign out</button>}
           </div>
           <div className="avatar" title={data.name || 'Me'}>{initials}</div>
         </div>
@@ -2022,6 +2078,7 @@ function App() {
             <button className="dm-item" onClick={() => { setShowDataMenu(false); exportData(); }}><span className="dm-ico">&#8595;</span>Export data (.json)</button>
             <button className="dm-item" onClick={() => { setShowDataMenu(false); importData(); }}><span className="dm-ico">&#8593;</span>Import data (.json)</button>
             <button className="dm-item" onClick={() => { setShowDataMenu(false); resetData(); }}><span className="dm-ico">&#8635;</span>Reset to starter data</button>
+            {session && <button className="dm-item" onClick={() => { setShowDataMenu(false); signOut(); }}><span className="dm-ico">&#8592;</span>Sign out</button>}
           </div>
         </div>
       )}
@@ -2029,7 +2086,77 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />); /* mount v2026-07-09 mobile-fit */
+/* ---- Auth gate: each person signs in; their budget is private to their login. ---- */
+function AuthScreen() {
+  const [mode,  setMode]  = React.useState('signin');   // 'signin' | 'signup'
+  const [email, setEmail] = React.useState('');
+  const [pw,    setPw]    = React.useState('');
+  const [msg,   setMsg]   = React.useState('');
+  const [busy,  setBusy]  = React.useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!window.sb) { setMsg('Cloud sign-in is unavailable right now.'); return; }
+    setBusy(true); setMsg('');
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await window.sb.auth.signUp({ email, password: pw });
+        if (error) setMsg(error.message);
+        else if (!data.session) setMsg('Account created. Check your email to confirm, then sign in.');
+        /* if data.session exists, onAuthStateChange signs us straight in */
+      } else {
+        const { error } = await window.sb.auth.signInWithPassword({ email, password: pw });
+        if (error) setMsg(error.message);
+      }
+    } catch (err) { setMsg(String((err && err.message) || err)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="auth-wrap">
+      <form className="auth-card" onSubmit={submit}>
+        <div className="auth-brand"><span className="brand-mark"></span><span className="brand-name">Ledger</span></div>
+        <h2 className="auth-title">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h2>
+        <p className="auth-sub">Your budget is private to your login.</p>
+        <label className="auth-field">Email
+          <input type="email" value={email} autoComplete="username"
+            onChange={e => setEmail(e.target.value)} required />
+        </label>
+        <label className="auth-field">Password
+          <input type="password" value={pw}
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            onChange={e => setPw(e.target.value)} required minLength={6} />
+        </label>
+        <button className="btn primary auth-submit" type="submit" disabled={busy}>
+          {busy ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
+        </button>
+        {msg && <div className="auth-msg">{msg}</div>}
+        <button type="button" className="auth-switch"
+          onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setMsg(''); }}>
+          {mode === 'signup' ? 'Have an account? Sign in' : 'New here? Create an account'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Root() {
+  const [session, setSession] = React.useState(undefined);   // undefined = still checking
+  React.useEffect(() => {
+    if (!window.sb) { setSession(null); return; }
+    window.sb.auth.getSession().then(({ data }) => setSession(data.session || null));
+    const { data: sub } = window.sb.auth.onAuthStateChange((_evt, s) => setSession(s));
+    return () => { if (sub && sub.subscription) sub.subscription.unsubscribe(); };
+  }, []);
+
+  if (!window.sb) return <App session={null} />;                     // cloud unavailable → local-only
+  if (session === undefined)
+    return <div className="auth-wrap"><div className="auth-card auth-loading">Loading…</div></div>;
+  if (!session) return <AuthScreen />;
+  return <App key={session.user.id} session={session} />;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />); /* mount v2026-07-14 cloud-auth */
   </script>
 </body>
 </html>
