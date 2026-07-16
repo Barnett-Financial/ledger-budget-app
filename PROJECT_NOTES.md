@@ -144,3 +144,30 @@ just had no visible/trustworthy status).
   the Windows path itself shows a problem.
 - Not yet done: Jason still needs to commit (`js/budget.jsx`, `js/app.jsx`, `styles.css`,
   `.gitignore`) via GitHub Desktop and confirm on the live Vercel URL.
+
+## 2026-07-16 (same day) — Batch 3: portal the ⓘ popover, Escape-to-close, dialog a11y
+
+Root cause of "popups fall behind text": `.info-pop` is `position:fixed` but rendered
+inside a sticky sheet cell (`z-index:3`), which creates its own stacking context — so the
+popover's `z-index:300` only wins within that one cell, and later sticky cells (same
+z-index, later in paint order) draw over it.
+
+- `js/shared.jsx`, `Info`: popover now renders via `ReactDOM.createPortal(..., document.body)`,
+  escaping every stacking context. (`ReactDOM` is a pre-existing global from the CDN
+  `<script>` tag in `index.html`'s `<head>`, loaded well before `js/shared.jsx`.)
+- `js/shared.jsx`: added `useEscapeClose(onClose)` — a tiny global hook (top-level
+  `function`, no import/export, same cross-file pattern as `Info`/`Kpi`) that closes on
+  `Escape`.
+- Wired into `RowSettingsModal`, `DebtRateModal`, `GivingGoalModal` (`js/budget.jsx`),
+  `LogExpenseModal` (`js/track.jsx`), `AddMilestoneModal` (`js/plan.jsx`) — one line each,
+  `useEscapeClose(onClose);` at the top of the component. For the Data menu in
+  `js/app.jsx` (not a component, just conditionally-rendered JSX in `App`), called
+  `useEscapeClose(() => { if (showDataMenu) setShowDataMenu(false); })` unconditionally
+  (hooks can't be called conditionally) with the guard inside the handler instead.
+- Added `role="dialog" aria-modal="true" aria-label="..."` to each `.modal` div (the 5
+  modals above; the Data menu uses `.data-menu`, not `.modal`, so left as-is per the
+  literal scope of the request).
+- Verified via Windows-path Read tool: all 5 edited files (`shared.jsx`, `budget.jsx`,
+  `track.jsx`, `plan.jsx`, `app.jsx`) end cleanly with the expected final lines/line
+  counts — no truncation this pass. Not yet spot-checked on the live site (scroll test +
+  Escape-in-each-modal) — do that after Jason deploys.

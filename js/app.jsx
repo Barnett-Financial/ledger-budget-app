@@ -14,6 +14,7 @@ function App({ session }) {
   });
   const [showDataMenu,      setShowDataMenu]      = React.useState(false);   // Fix #3
   const [pendingLogExpense, setPendingLogExpense] = React.useState(false);   // Fix #3 (FAB)
+  useEscapeClose(() => { if (showDataMenu) setShowDataMenu(false); });   // only acts while the Data menu is open
   const [data,     setData]     = React.useState(() => {
     try {
       const raw = localStorage.getItem('ledger.data.v2');

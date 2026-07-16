@@ -58,7 +58,17 @@ function Info({ text, label }) {
       onMouseEnter={show} onMouseLeave={() => setPos(null)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggle(e); }}>
       &#9432;
-      {pos && <span className="info-pop" style={{ position:'fixed', left:pos.x, top:pos.y, width:pos.w }}>{text}</span>}
+      {pos && ReactDOM.createPortal(<span className="info-pop" style={{ position:'fixed', left:pos.x, top:pos.y, width:pos.w }}>{text}</span>, document.body)}
     </span>
   );
+}
+
+/* 2026-07-16: Escape-to-close for modals/menus — sheet ⓘ popovers were trapped in a
+   sticky-cell stacking context (fixed above), and modals had no keyboard close. */
+function useEscapeClose(onClose) {
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 }

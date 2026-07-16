@@ -294,6 +294,7 @@ function PlanScreen({ data, setData }) {
 }
 
 function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }) {
+  useEscapeClose(onClose);
   const [name,        setName]        = React.useState('');
   const [detail,      setDetail]      = React.useState('');
   const [target,      setTarget]      = React.useState('');
@@ -315,7 +316,7 @@ function AddMilestoneModal({ defaultStartCash, defaultStartLT, onSave, onClose }
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Add milestone" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head"><h2>Add milestone</h2><button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button></div>
         <div className="form-field">
           <label>Milestone name</label>

@@ -277,6 +277,7 @@ function CategoryCombobox({ data, value, onChange }) {
 }
 
 function LogExpenseModal({ data, monthIdx, year, defaultCategoryId, onSave, onClose }) {
+  useEscapeClose(onClose);
   const today = new Date();
   const defaultDate = (today.getFullYear() === year && today.getMonth() === monthIdx)
     ? today.toISOString().slice(0, 10)
@@ -316,7 +317,7 @@ function LogExpenseModal({ data, monthIdx, year, defaultCategoryId, onSave, onCl
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Log expense" onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head">
           <h2>Log expense</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>

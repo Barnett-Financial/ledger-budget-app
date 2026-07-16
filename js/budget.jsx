@@ -769,6 +769,7 @@ function Rule({ label, sub, val, ok, goalBtn }) {
 }
 /* Fix #1 / #6: per-row settings — fill mode, fund classification, payroll deductions */
 function RowSettingsModal({ kind, row, netMonthlyAvg = 0, deductionCatMatches = [], onSave, onClose }) {
+  useEscapeClose(onClose);
   const isIncome = kind === 'income';
   const [fillMode, setFillMode] = React.useState(row.fillMode === 'manual' ? 'manual' : 'across');
   const [isFund,   setIsFund]   = React.useState(!!row.isFund);
@@ -834,7 +835,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, deductionCatMatches = 
 
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ width: isIncome ? 440 : 380 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={isIncome ? 'Income settings' : 'Category settings'} style={{ width: isIncome ? 440 : 380 }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleSave(); }}>
         <div className="modal-head">
           <h2>{isIncome ? 'Income settings' : 'Category settings'}</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
@@ -913,6 +914,7 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, deductionCatMatches = 
 }
 
 function DebtRateModal({ currentRate, onSave, onClose }) {
+  useEscapeClose(onClose);
   const [rate, setRate] = React.useState(String(currentRate));
   const handleSave = () => {
     const r = parseFloat(rate);
@@ -921,7 +923,7 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
   };
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Debt interest rate" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
         <div className="modal-head">
           <h2>Debt interest rate</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
@@ -945,6 +947,7 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
 }
 
 function GivingGoalModal({ currentGoal, onSave, onClose }) {
+  useEscapeClose(onClose);
   const [goal, setGoal] = React.useState(currentGoal != null ? String(currentGoal) : '');
   const handleSave = () => {
     const g = parseFloat(goal);
@@ -955,7 +958,7 @@ function GivingGoalModal({ currentGoal, onSave, onClose }) {
   const handleClear = () => { onSave(null); onClose(); };
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Giving goal" style={{ width:340 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
         <div className="modal-head">
           <h2>Giving goal</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
