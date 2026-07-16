@@ -79,6 +79,19 @@ Jason commits via GitHub Desktop.
   errors and the specific fixed strings/classes) — zero errors, all checks
   passed.
 
+## 2026-07-16 — CSS truncation repair + review batches + starter-data fix
+
+- **Deployed styles.css had been truncated** mid-declaration at `.btn { min` inside the 768px
+  media block (auth CSS appended after the break → all `.auth-*` rules swallowed, mobile-fit
+  tail dead). Repaired by splicing the intact tail from `styles.2026-07-14.backup.css`
+  (asserting script; braces 305/305). Full review + paste-ready batches: `REVIEW-2026-07-16.md`.
+- Batches 2–6 (sync pill/autosave flush, Info-popover portal + Escape, iOS 16px inputs,
+  password reset, BalancesModal) were applied in follow-up sessions and are live.
+- Removed the starter `Retirement (401k)` category from `STARTER_DATA` (data.js) — it was the
+  double-count trap vs. the gear modal's payroll 401(k). Existing accounts unaffected.
+- Reminder proven again this session: the bash mount served a stale truncated `data.js` right
+  after a successful Windows-side Edit — verify via Read/Grep on the Windows path only.
+
 ## 2026-07-15 — Refactor: split index.html into modular jsx files
 
 - Pure refactor, **no behavior change**. `index.html` went from ~2,160 lines

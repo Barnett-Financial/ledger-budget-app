@@ -59,9 +59,11 @@ const STARTER_DATA = {
       { id: 'vacation', name: 'Vacation / Travel',  bucket: 'wants', monthly: arr12(100)  },
     ]},
     { id: 'g_savings', name: 'Savings', cats: [
+      /* 2026-07-16: removed the starter 'Retirement (401k)' category. A 401(k) belongs in an
+         income row's ⚙ pretax payroll deductions; shipping it as a spending category was the
+         exact double-count trap the gear modal warns about. Existing accounts are unaffected. */
       { id: 'savings',  name: 'Cash Savings',           bucket: 'save', monthly: arr12(250) },
       { id: 'ira',      name: 'Retirement (Roth IRA)',  bucket: 'save', monthly: arr12(500) },
-      { id: 'k401',     name: 'Retirement (401k)',      bucket: 'save', monthly: arr12(250) },
     ]},
     { id: 'g_giving', name: 'Giving', cats: [
       { id: 'tithe',    name: 'Charitable',         bucket: 'give',  monthly: arr12(200)  },
