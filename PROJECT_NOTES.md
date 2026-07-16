@@ -348,3 +348,23 @@ worst on Fund rows (extra badge).
   sheet with several groups/categories and confirm (a) group rows read as a tinted, bold
   band above their categories, and (b) the Category/Month/Annual header stays pinned
   near the top of the screen instead of scrolling away.
+- **Follow-up same session — mobile sticky header was actually broken:** Jason sent a
+  phone screenshot showing the CATEGORY/JUL/ANNUAL header stuck mid-sheet (overlapping
+  the Cash Savings/Debt rows) and not tracking scroll. Root cause: `.sheet-scroll {
+  overflow-x: auto; }` (pre-existing rule, needed on desktop for the many-month
+  horizontal scroll) has no `overflow-y` set — per the CSS overflow spec, when one axis
+  is non-`visible` the other silently computes to `auto` too. That makes `.sheet-scroll`
+  itself — not the page — the sticky positioning containing block for anything inside
+  it, including the new `.row.head` sticky rule. iOS Safari is known to render
+  position:sticky unreliably when it's nested this way. Fix: added
+  `.sheet-scroll { overflow-x: visible; }` inside the mobile media query — mobile only
+  ever shows one visible month (`visibleMonths` short-circuits to `[focusMonth]` or `[]`
+  whenever `isMobile` is true, ignoring `colMode`), so horizontal scroll was never
+  actually needed there. This should let `.row.head` stick against the real viewport,
+  same mechanism as `.topbar`. Desktop is unchanged (still needs `overflow-x:auto` for
+  wide multi-month views) — if the same containing-block issue turns out to affect
+  desktop too, it can't be fixed the same way (can't drop overflow-x there) and would
+  need a different approach (e.g. moving the sticky header outside the scroll container).
+  **Not yet re-verified on an actual phone** — ask Jason to check again after deploying,
+  and if the header is still off, the next lever is the `top: 60px` value right above
+  this rule in `styles.css`'s mobile block.

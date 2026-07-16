@@ -1096,6 +1096,18 @@ select.form-input { cursor: pointer; padding-right: 8px; }
      sheet header's sticky offset to match, so it sits flush under it. */
   .row.head { top: 60px; }
 
+  /* 2026-07-16 fix: `.sheet-scroll { overflow-x: auto }` (base rule) silently forces
+     overflow-y to auto too (a CSS spec quirk — one axis non-visible makes the other
+     compute to auto), which makes .sheet-scroll itself the sticky positioning
+     container instead of the page. That's the actual mobile bug: .row.head's sticky
+     was resolving against the wrong ancestor, so it locked at the wrong spot and
+     didn't track scroll correctly (worse on iOS Safari, which is notoriously buggy
+     with position:sticky nested inside overflow containers). Mobile only ever shows
+     one month column (see visibleMonths in BudgetScreen), so horizontal scroll is
+     never actually needed here — disabling it lets .row.head stick against the real
+     page viewport, same as .topbar. */
+  .sheet-scroll { overflow-x: visible; }
+
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .page-head h1 { font-size: 32px; }
   .page-head .actions { width: 100%; }
