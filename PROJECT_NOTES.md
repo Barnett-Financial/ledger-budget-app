@@ -368,3 +368,40 @@ worst on Fund rows (extra badge).
   **Not yet re-verified on an actual phone** — ask Jason to check again after deploying,
   and if the header is still off, the next lever is the `top: 60px` value right above
   this rule in `styles.css`'s mobile block.
+
+## 2026-07-16 (same day) — THE actual root cause: styles.css was cache-stuck, not broken
+
+Jason pushed the `.sheet-scroll` overflow fix and reported the sticky header still didn't
+work on his phone (Chrome). Investigated by fetching the LIVE deployed files directly:
+`https://ledger-budget-app-zeta.vercel.app/styles.css` (plain fetch) returned an OLD
+version missing literally every CSS change from this entire session — no `.sync-pill`,
+no iOS 16px input fix, no name-column mobile fix, no group-row styling, no sticky
+header. But adding a cache-busting query string
+(`https://ledger-budget-app-zeta.vercel.app/styles.css?cachebust=x`) returned the FULL,
+correct, current file with every change present. `index.html` fetched the same way (with
+vs. without a query string) returned identical content either way. **`js/app.jsx`
+fetched live (no cache-bust) already contained every JS change correctly.**
+
+Conclusion: every deploy this session actually succeeded and contained the right code —
+the problem was a caching layer (browser and/or Vercel's edge/CDN) serving a stale
+cached copy of `styles.css` specifically, because its URL (`styles.css`) never changes
+between deploys, so nothing forces a re-fetch once it's cached. This explains why *every*
+CSS-only fix this session appeared to "not take effect" while JS fixes worked fine —
+it was never a broken fix, it was Jason's phone (and possibly other visitors) never
+actually receiving the new file.
+
+**Fix:** added a cache-busting `?v=20260716` query string to every locally-served asset
+referenced in `index.html` — `styles.css`, `data.js`, and all five `js/*.jsx` files —
+not just the one that was observed stale, since the same risk applies to all of them.
+**This version string must be bumped on any future session that edits any of these
+files**, or the exact same stuck-cache problem will recur silently. See
+[[ledger-fs-sync-quirk]] for the unrelated-but-similarly-confusing sandbox mount quirk —
+don't conflate the two: that one is about the Windows↔sandbox bash mount lagging during
+*editing*; this one is about the *deployed* file being cached stale in the *browser/CDN*
+after a real, correct deploy.
+
+**One-time action needed from Jason:** because his phone's browser has been caching the
+old `styles.css` (and possibly the old `index.html`, though that one appears unaffected),
+he should hard-refresh or clear site data for `ledger-budget-app-zeta.vercel.app` once
+after this deploys, to break out of the stale cache. After that, the versioned URLs
+should make every future deploy self-invalidating without needing a manual cache clear.
