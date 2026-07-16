@@ -42,6 +42,8 @@ html, body, #root {
 }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 input, select  { font: inherit; color: inherit; }
+button, input, select { touch-action: manipulation; }
+button { -webkit-tap-highlight-color: transparent; }
 
 /* ------------------------------- App shell ----------------------- */
 
@@ -1230,6 +1232,12 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   }
   .form-input { min-height: 44px; }
   .control input[type="range"] { height: 44px; }
+
+  /* iOS Safari zooms the page on focus of any input under 16px — fix the font-size,
+     not the viewport (maximum-scale would break pinch-zoom accessibility). */
+  .form-input, .auth-field input { font-size: 16px; }
+  .num input, .name input { font-size: 16px; }
+  .num { font-size: 14px; }
 
   /* KPI numbers sized for half-width cards; never overflow the cell. */
   .kpi { padding: 14px 16px; }

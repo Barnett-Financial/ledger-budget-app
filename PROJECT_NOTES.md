@@ -171,3 +171,23 @@ z-index, later in paint order) draw over it.
   `track.jsx`, `plan.jsx`, `app.jsx`) end cleanly with the expected final lines/line
   counts — no truncation this pass. Not yet spot-checked on the live site (scroll test +
   Escape-in-each-modal) — do that after Jason deploys.
+
+## 2026-07-16 (same day) — Batch 4: stop iOS zoom-on-focus + touch polish
+
+- `styles.css`, inside `@media (max-width: 768px)` (right after the existing
+  `.form-input { min-height: 44px; }` line): added `font-size: 16px` for
+  `.form-input`, `.auth-field input`, `.num input`, `.name input` (iOS Safari zooms the
+  viewport on focus of any input under 16px — fixed at the font-size, not via
+  `maximum-scale` in the viewport meta, which would break pinch-zoom accessibility), plus
+  `.num { font-size: 14px; }` so the (now-larger) sheet number column doesn't blow out a
+  5-digit amount in single-month view.
+- `styles.css`, top level (outside any media query, right after the existing
+  `button`/`input, select` resets at the top of the file): added
+  `button, input, select { touch-action: manipulation; }` and
+  `button { -webkit-tap-highlight-color: transparent; }` — removes the ~350ms
+  double-tap-zoom delay and the gray tap-flash on the sheet's bucket dots/gear buttons.
+- Verified via Windows-path Read tool: file grew from 1327 → 1336 lines exactly as
+  expected (9 new lines), tail (`.auth-switch:hover`) intact, no truncation this pass.
+- Not yet verified on an actual phone — do that after Jason deploys: tap a budget cell
+  and confirm the page doesn't zoom, and check a 5-digit amount in single-month view
+  still fits the column.
