@@ -191,3 +191,35 @@ z-index, later in paint order) draw over it.
 - Not yet verified on an actual phone — do that after Jason deploys: tap a budget cell
   and confirm the page doesn't zoom, and check a 5-digit amount in single-month view
   still fits the column.
+
+## 2026-07-16 (same day) — Batch 5: password reset + friendlier auth errors
+
+- `js/app.jsx`: added `friendlyAuthError(message)` mapping `'Invalid login credentials'`
+  → "Email or password is incorrect." and `'Email not confirmed'` → "Please confirm your
+  email first — check your inbox."; applied in `AuthScreen.submit`, `forgotPassword`, and
+  `SetNewPassword.submit`.
+- Added a reusable `PasswordField` component (show/hide toggle, `type` swap between
+  `password`/`text`, ≥44px button, `aria-label`) used for sign-in/up's password field and
+  both fields in the new reset form — no `styles.css` changes needed, sizing/spacing done
+  inline with existing CSS vars.
+- `AuthScreen`: "Forgot password?" link under the password field, sign-in mode only, only
+  active if postgres email is filled. Calls
+  `window.sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })`.
+- Added `SetNewPassword` component (two `PasswordField`s, 6-char minimum, must match,
+  calls `window.sb.auth.updateUser({ password })`, `onDone()` on success).
+- `Root`: added `recovery` state; `onAuthStateChange` now checks
+  `evt === 'PASSWORD_RECOVERY'` and sets it. Render order: loading → **recovery →
+  SetNewPassword** → no-session → AuthScreen → App. Because the recovery event also
+  carries a real session, clearing `recovery` on success drops the user straight into
+  `<App>` without a separate sign-in step.
+- Verified via Windows-path Read tool: file complete, ends cleanly at line 406
+  (`ReactDOM.createRoot(...)`), no truncation.
+- **Important — not yet confirmed:** `resetPasswordForEmail`'s `redirectTo` only works if
+  the target URL is on Supabase's allow-list. In the Supabase dashboard for project
+  `bmhzvokxpglsdcrdbmra`: **Authentication → URL Configuration**, confirm the live Vercel
+  URL (`https://ledger-budget-app-zeta.vercel.app`) is set as the Site URL and/or in
+  Redirect URLs — otherwise the reset email link may not land back on the app. This
+  wasn't checked this session (no MCP tool exposes Auth URL config; it's dashboard-only).
+- Full flow (request reset → open email link → set new password → sign in with it) not
+  yet tested end-to-end — needs a real test account and access to its inbox, so this is
+  on Jason to run after deploying.

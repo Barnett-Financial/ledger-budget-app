@@ -240,6 +240,33 @@ function App({ session }) {
   );
 }
 
+/* 2026-07-16: plain-language mapping for the handful of raw Supabase auth error
+   strings a user is likely to actually see. Anything else passes through as-is. */
+function friendlyAuthError(message) {
+  if (message === 'Invalid login credentials') return 'Email or password is incorrect.';
+  if (message === 'Email not confirmed')       return 'Please confirm your email first — check your inbox.';
+  return message;
+}
+
+/* 2026-07-16: shared show/hide toggle for password inputs (sign-in/up + reset). */
+function PasswordField({ label, value, onChange, autoComplete, minLength }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <label className="auth-field">{label}
+      <div style={{ display:'flex', alignItems:'stretch', gap:6 }}>
+        <input type={show ? 'text' : 'password'} value={value} autoComplete={autoComplete}
+          onChange={onChange} required minLength={minLength} style={{ flex:1, minWidth:0 }} />
+        <button type="button" onClick={() => setShow(s => !s)}
+          aria-label={show ? 'Hide password' : 'Show password'}
+          style={{ minWidth:44, minHeight:44, flexShrink:0, border:'1px solid var(--line)',
+                   borderRadius:'var(--r-md)', background:'var(--bg-soft)', color:'var(--muted)', fontSize:12 }}>
+          {show ? 'Hide' : 'Show'}
+        </button>
+      </div>
+    </label>
+  );
+}
+
 /* ---- Auth gate: each person signs in; their budget is private to their login. ---- */
 function AuthScreen() {
   const [mode,  setMode]  = React.useState('signin');   // 'signin' | 'signup'
@@ -254,14 +281,32 @@ function AuthScreen() {
     setBusy(true); setMsg('');
     try {
       if (mode === 'signup') {
-        const { data, error } = await window.sb.auth.signUp({ email, password: pw });
-        if (error) setMsg(error.message);
+        /* explicit emailRedirectTo so the confirmation link lands here regardless of
+           whatever the Supabase project's Site URL happens to be set to (e.g. a
+           leftover localhost default) — same fix as the password-reset redirect. */
+        const { data, error } = await window.sb.auth.signUp({ email, password: pw,
+          options: { emailRedirectTo: window.location.origin } });
+        if (error) setMsg(friendlyAuthError(error.message));
         else if (!data.session) setMsg('Account created. Check your email to confirm, then sign in.');
         /* if data.session exists, onAuthStateChange signs us straight in */
       } else {
         const { error } = await window.sb.auth.signInWithPassword({ email, password: pw });
-        if (error) setMsg(error.message);
+        if (error) setMsg(friendlyAuthError(error.message));
       }
+    } catch (err) { setMsg(String((err && err.message) || err)); }
+    finally { setBusy(false); }
+  };
+
+  /* 2026-07-16: "Forgot password?" (sign-in mode only) — emails a recovery link that
+     lands back on this app; Root's onAuthStateChange picks up the PASSWORD_RECOVERY
+     event and shows SetNewPassword. */
+  const forgotPassword = async () => {
+    if (!email) { setMsg('Enter your email above, then tap "Forgot password?" again.'); return; }
+    if (!window.sb) { setMsg('Cloud sign-in is unavailable right now.'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const { error } = await window.sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      setMsg(error ? friendlyAuthError(error.message) : 'Check your email for a reset link.');
     } catch (err) { setMsg(String((err && err.message) || err)); }
     finally { setBusy(false); }
   };
@@ -276,11 +321,15 @@ function AuthScreen() {
           <input type="email" value={email} autoComplete="username"
             onChange={e => setEmail(e.target.value)} required />
         </label>
-        <label className="auth-field">Password
-          <input type="password" value={pw}
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            onChange={e => setPw(e.target.value)} required minLength={6} />
-        </label>
+        <PasswordField label="Password" value={pw} onChange={e => setPw(e.target.value)}
+          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} minLength={6} />
+        {mode === 'signin' && (
+          <button type="button" onClick={forgotPassword} disabled={busy}
+            style={{ background:'none', border:'none', padding:0, marginTop:-8,
+                     fontSize:12.5, color:'var(--accent)', textDecoration:'underline', cursor:'pointer' }}>
+            Forgot password?
+          </button>
+        )}
         <button className="btn primary auth-submit" type="submit" disabled={busy}>
           {busy ? 'Please wait…' : (mode === 'signup' ? 'Create account' : 'Sign in')}
         </button>
@@ -294,18 +343,65 @@ function AuthScreen() {
   );
 }
 
+/* 2026-07-16: password-reset deep link. Supabase signs the user into a special
+   "recovery" session and fires this event when they land back here from the email
+   link; while `recovery` is set we show SetNewPassword instead of the normal app. */
+function SetNewPassword({ onDone }) {
+  const [pw1, setPw1] = React.useState('');
+  const [pw2, setPw2] = React.useState('');
+  const [msg, setMsg] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setMsg('');
+    if (pw1.length < 6)  { setMsg('Password must be at least 6 characters.'); return; }
+    if (pw1 !== pw2)     { setMsg('Passwords do not match.'); return; }
+    setBusy(true);
+    try {
+      const { error } = await window.sb.auth.updateUser({ password: pw1 });
+      if (error) setMsg(friendlyAuthError(error.message));
+      else onDone();
+    } catch (err) { setMsg(String((err && err.message) || err)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="auth-wrap">
+      <form className="auth-card" onSubmit={submit}>
+        <div className="auth-brand"><span className="brand-mark"></span><span className="brand-name">Ledger</span></div>
+        <h2 className="auth-title">Set a new password</h2>
+        <p className="auth-sub">Choose a new password for your account.</p>
+        <PasswordField label="New password" value={pw1}
+          onChange={e => setPw1(e.target.value)} autoComplete="new-password" minLength={6} />
+        <PasswordField label="Confirm new password" value={pw2}
+          onChange={e => setPw2(e.target.value)} autoComplete="new-password" minLength={6} />
+        <button className="btn primary auth-submit" type="submit" disabled={busy}>
+          {busy ? 'Please wait…' : 'Set new password'}
+        </button>
+        {msg && <div className="auth-msg">{msg}</div>}
+      </form>
+    </div>
+  );
+}
+
 function Root() {
-  const [session, setSession] = React.useState(undefined);   // undefined = still checking
+  const [session,  setSession]  = React.useState(undefined);   // undefined = still checking
+  const [recovery, setRecovery] = React.useState(false);
   React.useEffect(() => {
     if (!window.sb) { setSession(null); return; }
     window.sb.auth.getSession().then(({ data }) => setSession(data.session || null));
-    const { data: sub } = window.sb.auth.onAuthStateChange((_evt, s) => setSession(s));
+    const { data: sub } = window.sb.auth.onAuthStateChange((evt, s) => {
+      if (evt === 'PASSWORD_RECOVERY') setRecovery(true);
+      setSession(s);
+    });
     return () => { if (sub && sub.subscription) sub.subscription.unsubscribe(); };
   }, []);
 
   if (!window.sb) return <App session={null} />;                     // cloud unavailable → local-only
   if (session === undefined)
     return <div className="auth-wrap"><div className="auth-card auth-loading">Loading…</div></div>;
+  if (recovery) return <SetNewPassword onDone={() => setRecovery(false)} />;
   if (!session) return <AuthScreen />;
   return <App key={session.user.id} session={session} />;
 }
