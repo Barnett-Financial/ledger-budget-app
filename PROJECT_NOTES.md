@@ -223,3 +223,39 @@ z-index, later in paint order) draw over it.
 - Full flow (request reset → open email link → set new password → sign in with it) not
   yet tested end-to-end — needs a real test account and access to its inbox, so this is
   on Jason to run after deploying.
+- Follow-up same session: Supabase project `bmhzvokxpglsdcrdbmra`'s Site URL was still
+  `http://localhost:3000` (a leftover default). Jason added the Vercel URL as a Redirect
+  URL, which covers `resetPasswordForEmail`'s explicit `redirectTo`. Also patched
+  `signUp()` to pass `options: { emailRedirectTo: window.location.origin }` so new-user
+  confirmation emails don't depend on the Site URL setting either. Site URL itself is
+  still `localhost:3000` — harmless now that both auth calls pass explicit redirects, but
+  worth updating in the dashboard eventually for general hygiene (magic links, etc. can
+  fall back to it).
+
+## 2026-07-16 (same day) — Batch 6: edit beginning balances from any month
+
+- `js/budget.jsx`: added `BalancesModal` (same modal-overlay/modal/modal-head/
+  modal-actions pattern as `DebtRateModal`, `useEscapeClose`, `role="dialog"`) with four
+  fields — Beginning Cash Savings, Beginning Long-term Invest, Beginning Debt, and the
+  debt interest rate — saving through the existing setters (`setBeginningCash`,
+  `setBeginningLongTerm`, `setBeginningDebt`, `setDebtInterestRate`) passed down from
+  `BudgetScreen`. Includes the required one-line hint: "Balances are as of January 1.
+  Later months are computed."
+- `BudgetScreen`: new `showBalancesModal` state (same pattern as
+  `showDebtRateModal`/`showGivingGoalModal`), rendered alongside the other modals; passes
+  `onBalancesClick` down to `Sheet`.
+- `Sheet`: added `const janVisible = visibleMonths.includes(0);` — true whenever the
+  currently-visible column(s) include January (desktop "all" months, a Q1 quarter, or
+  January itself), false otherwise (mobile single-month view on any other month, or
+  desktop single-month/quarter view landed on a non-Q1 range). When `!janVisible`, each of
+  the three "Beginning …" rows' name cell becomes a button (with a small ✎/`&#9998;`
+  affordance, `minHeight:44` inline on mobile) that opens `BalancesModal`; the existing
+  January inline `NumberInput`s are untouched. The Debt row's existing standalone
+  "X% rate" pill (opens `DebtRateModal`) is kept as-is alongside the new button — two
+  entry points to (overlapping) rate-editing, both harmless.
+- Verified via Windows-path Read tool: `budget.jsx` ends cleanly after `GivingGoalModal`'s
+  closing brace, no truncation; spot-checked all three balance rows, the modal-render
+  block, and the full `BalancesModal` component.
+- Not yet tested live — do that after Jason deploys: on mobile, jump to July, tap
+  "Cash Savings" (now a button), set Beginning Cash to 25000 via the modal, and confirm
+  July's beginning-cash figure and the KPIs update.

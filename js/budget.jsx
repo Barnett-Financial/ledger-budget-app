@@ -53,6 +53,7 @@ function BudgetScreen({ data, setData }) {
   const [showInstructions,   setShowInstructions]   = React.useState(false);
   const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
   const [showGivingGoalModal, setShowGivingGoalModal] = React.useState(false);
+  const [showBalancesModal, setShowBalancesModal]   = React.useState(false);
   const [settingsRow,        setSettingsRow]        = React.useState(null);
   /* Fix 2.3: pulse the ⚙ gear on first mobile run so it's discoverable */
   const [gearHint,           setGearHint]           = React.useState(
@@ -399,6 +400,7 @@ function BudgetScreen({ data, setData }) {
             setBeginningCash={setBeginningCash} setBeginningLongTerm={setBeginningLongTerm}
             setBeginningDebt={setBeginningDebt}
             onDebtRateClick={() => setShowDebtRateModal(true)}
+            onBalancesClick={() => setShowBalancesModal(true)}
             onOpenSettings={setSettingsRow}
           />
         </div>
@@ -422,6 +424,17 @@ function BudgetScreen({ data, setData }) {
           currentGoal={data.givingGoalPct}
           onSave={setGivingGoal}
           onClose={() => setShowGivingGoalModal(false)}
+        />
+      )}
+
+      {showBalancesModal && (
+        <BalancesModal
+          data={data}
+          onSaveCash={setBeginningCash}
+          onSaveLT={setBeginningLongTerm}
+          onSaveDebt={setBeginningDebt}
+          onSaveRate={setDebtInterestRate}
+          onClose={() => setShowBalancesModal(false)}
         />
       )}
 
@@ -465,8 +478,13 @@ function Sheet(props) {
     setIncomeCell, setCatCell, setIncomeName, setCatName, setGroupName,
     cycleBucket, addIncome, addCat, addGroup, delIncome, delCat, delGroup,
     setBeginningCash, setBeginningLongTerm, setBeginningDebt, onDebtRateClick,
+    onBalancesClick,
     onOpenSettings,
   } = props;
+
+  /* 2026-07-16: when the visible column(s) don't include January, the balance rows'
+     inline inputs aren't shown at all — make the row name a button to BalancesModal. */
+  const janVisible = visibleMonths.includes(0);
 
   const n  = visibleMonths.length;
   const monthCols = n > 0 ? 'repeat(' + n + ', minmax(64px, 1fr)) ' : '';
@@ -489,7 +507,15 @@ function Sheet(props) {
       <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Cash Savings' : 'Beginning Cash Savings'}
+          {janVisible ? (isMobile ? 'Cash Savings' : 'Beginning Cash Savings') : (
+            <button type="button" onClick={onBalancesClick} title="Edit beginning balances"
+              style={{ display:'inline-flex', alignItems:'center', gap:4, background:'none', border:'none',
+                       padding:0, font:'inherit', fontWeight:'inherit', color:'inherit', cursor:'pointer',
+                       minHeight: isMobile ? 44 : undefined }}>
+              {isMobile ? 'Cash Savings' : 'Beginning Cash Savings'}
+              <span aria-hidden="true" style={{ fontSize:11, color:'var(--muted)' }}>&#9998;</span>
+            </button>
+          )}
           {!isMobile && <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planCashYield||0).toFixed(1)}% yield</span>}
           <Info label="About beginning cash"
             text="Your cash/savings balance on Jan 1. Editable in January only — later months are computed, compounding at the Cash Yield from the Plan tab, plus cash-savings categories each month." />
@@ -505,7 +531,15 @@ function Sheet(props) {
       <div className="row balance begin" style={rs}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Long-term Invest' : 'Beginning Long-term Invest'}
+          {janVisible ? (isMobile ? 'Long-term Invest' : 'Beginning Long-term Invest') : (
+            <button type="button" onClick={onBalancesClick} title="Edit beginning balances"
+              style={{ display:'inline-flex', alignItems:'center', gap:4, background:'none', border:'none',
+                       padding:0, font:'inherit', fontWeight:'inherit', color:'inherit', cursor:'pointer',
+                       minHeight: isMobile ? 44 : undefined }}>
+              {isMobile ? 'Long-term Invest' : 'Beginning Long-term Invest'}
+              <span aria-hidden="true" style={{ fontSize:11, color:'var(--muted)' }}>&#9998;</span>
+            </button>
+          )}
           {!isMobile && <span style={{ color:'var(--muted)', fontSize:10.5, marginLeft:6 }}>@ {(data.planLtYield||0).toFixed(1)}% yield</span>}
           <Info label="About beginning long-term balance"
             text="Your long-term investment balance on Jan 1. Editable in January only — later months compound at the Long-term Yield, plus retirement/long-term categories and any pretax 401(k)/HSA each month." />
@@ -521,7 +555,15 @@ function Sheet(props) {
       <div className="row balance begin" style={{ ...rs, borderBottom:'1px solid var(--line)' }}>
         <div></div>
         <div className="name" style={{ fontSize:12.5 }}>
-          {isMobile ? 'Debt' : 'Beginning Debt'}
+          {janVisible ? (isMobile ? 'Debt' : 'Beginning Debt') : (
+            <button type="button" onClick={onBalancesClick} title="Edit beginning balances"
+              style={{ display:'inline-flex', alignItems:'center', gap:4, background:'none', border:'none',
+                       padding:0, font:'inherit', fontWeight:'inherit', color:'inherit', cursor:'pointer',
+                       minHeight: isMobile ? 44 : undefined }}>
+              {isMobile ? 'Debt' : 'Beginning Debt'}
+              <span aria-hidden="true" style={{ fontSize:11, color:'var(--muted)' }}>&#9998;</span>
+            </button>
+          )}
           <button
             onClick={onDebtRateClick}
             title="Set debt interest rate"
@@ -937,6 +979,67 @@ function DebtRateModal({ currentRate, onSave, onClose }) {
         <p style={{ fontSize:12.5, color:'var(--muted)', margin:'-4px 0 16px' }}>
           Used to accrue monthly interest on your Beginning Debt balance. Categories named with "debt" or "interest" automatically reduce the balance each month.
         </p>
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={handleSave}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 2026-07-16: edit the three "Beginning …" balances (+ debt rate) from any month —
+   on mobile the sheet shows one month at a time, and those rows are only inline-
+   editable in January, so a user viewing July had no way to set starting cash/
+   investments/debt without switching months first. */
+function BalancesModal({ data, onSaveCash, onSaveLT, onSaveDebt, onSaveRate, onClose }) {
+  useEscapeClose(onClose);
+  const [cash, setCash] = React.useState(String(data.beginningCash      || 0));
+  const [lt,   setLt]   = React.useState(String(data.beginningLongTerm || 0));
+  const [debt, setDebt] = React.useState(String(data.beginningDebt     || 0));
+  const [rate, setRate] = React.useState(String(data.debtInterestRate  || 0));
+
+  const handleSave = () => {
+    const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+    onSaveCash(num(cash));
+    onSaveLT(num(lt));
+    onSaveDebt(num(debt));
+    const r = parseFloat(rate);
+    if (!isNaN(r) && r >= 0 && r <= 100) onSaveRate(r);
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Beginning balances"
+        style={{ width:380 }} onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}>
+        <div className="modal-head">
+          <h2>Beginning balances</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>&#215;</button>
+        </div>
+        <p style={{ fontSize:12.5, color:'var(--muted)', margin:'-4px 0 16px' }}>
+          Balances are as of January 1. Later months are computed.
+        </p>
+        <div className="form-field" style={{ marginBottom:10 }}>
+          <label>Beginning Cash Savings</label>
+          <input type="number" inputMode="decimal" className="form-input" value={cash}
+            onChange={e => setCash(e.target.value)} step="10" autoFocus />
+        </div>
+        <div className="form-field" style={{ marginBottom:10 }}>
+          <label>Beginning Long-term Invest</label>
+          <input type="number" inputMode="decimal" className="form-input" value={lt}
+            onChange={e => setLt(e.target.value)} step="10" />
+        </div>
+        <div className="form-field" style={{ marginBottom:10 }}>
+          <label>Beginning Debt</label>
+          <input type="number" inputMode="decimal" className="form-input" value={debt}
+            onChange={e => setDebt(e.target.value)} step="10" />
+        </div>
+        <div className="form-field">
+          <label>Debt interest rate <span style={{ color:'var(--muted)', textTransform:'none', letterSpacing:0 }}>(annual %)</span></label>
+          <input type="number" inputMode="decimal" className="form-input" value={rate}
+            onChange={e => setRate(e.target.value)} min="0" max="100" step="0.25" />
+        </div>
         <div className="modal-actions">
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleSave}>Save</button>
