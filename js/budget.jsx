@@ -654,7 +654,7 @@ function Sheet(props) {
             <div className="row group" style={rs}>
               <div></div>
               <div className="name"><input value={g.name} placeholder="Group name" onChange={e => setGroupName(g.id, e.target.value)} style={{ fontWeight:500 }} /></div>
-              {visibleMonths.map(m => <div key={m} className="num month muted">{fmt(gt.monthly[m], { zero:'-' })}</div>)}
+              {visibleMonths.map(m => <div key={m} className="num month">{fmt(gt.monthly[m], { zero:'-' })}</div>)}
               <div className="num annual">{fmt(gt.annual)}</div>
               <button className="row-del" aria-label="Delete group" onClick={() => delGroup(g.id)}>&#215;</button>
             </div>

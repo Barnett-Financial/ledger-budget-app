@@ -264,6 +264,14 @@ button { -webkit-tap-highlight-color: transparent; }
   letter-spacing: 0.14em;
   color: var(--muted);
   height: 36px;
+  /* 2026-07-16: float the Category/Month/Annual header so it stays legible while
+     scrolling down a long sheet. .sheet-wrap clips (overflow:hidden) but doesn't
+     force its own scroll, so this sticks to the page scroll, bounded to the
+     sheet's own height — same behavior as .month-summary/.chart-card elsewhere.
+     top matches the sticky .topbar's rendered height; overridden for mobile below. */
+  position: sticky;
+  top: 80px;
+  z-index: 10;
 }
 .row.head > div { padding: 0 8px; }
 .row.head > div.month { justify-content: center; }
@@ -282,13 +290,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .row.section > div { padding: 0 8px; font-weight: 500; }
 
 .row.group {
-  background: #FDFBF5;
+  background: var(--bg-soft);
   border-top: 1px solid var(--line-soft);
   height: 34px;
   font-weight: 500;
   color: var(--ink);
 }
-.row.group .num { color: var(--ink-soft); font-weight: 500; }
+.row.group .num { color: var(--ink); font-weight: 600; }
 .row.group:hover .row-del { opacity: 1; }
 
 .row.cat,
@@ -1083,6 +1091,10 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 16px; }
   .nav { display: none; }                 /* replaced by bottom tab bar */
   .main { padding: 20px 16px 150px; }     /* clearance for bottom nav + FAB */
+
+  /* mobile topbar is shorter (nav + desktop-data-actions are hidden) — lower the
+     sheet header's sticky offset to match, so it sits flush under it. */
+  .row.head { top: 60px; }
 
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .page-head h1 { font-size: 32px; }

@@ -317,3 +317,34 @@ worst on Fund rows (extra badge).
 - Not yet verified live — do that after Jason deploys: check "Car insurance" and any
   Fund-category rows show their full names on an actual phone, and confirm the ⚙ renders
   as a flat gray glyph rather than a colored emoji.
+
+## 2026-07-16 (same day) — Group subtotal styling + sticky sheet header
+
+- `styles.css`: `.row.group` background `#FDFBF5` → `var(--bg-soft)` (was a near-duplicate
+  of the surface color, barely tinted); `.row.group .num` → `color: var(--ink); font-weight:
+  600;` (was `--ink-soft` / 500 — same as a plain category row, no visual hierarchy).
+- `js/budget.jsx`: removed the `muted` class from the group header's month cells
+  (`className="num month"`, was `"num month muted"`) so subtotals read at full contrast
+  instead of grayed out to match the old near-white background.
+- Added a sticky header to the sheet (`.row.head` — the Category/Month/Annual row):
+  `position: sticky; top: 80px; z-index: 10;` on desktop, with `top: 60px` inside the
+  mobile media query. Sticks correctly despite `.sheet-wrap`'s `overflow: hidden`
+  because that wrapper has no fixed height (nothing to clip vertically) — same mechanism
+  already used for `.month-summary`/`.chart-card` on the Plan tab, which is where the
+  `80px` desktop offset comes from. The existing horizontal-sticky corner cells (dot /
+  annual columns, `nth-child`/`nth-last-child` rule) are unaffected — different axis,
+  same row, no conflict.
+- **Caveat, flagged for Jason to check live:** the `top` offsets are estimates based on
+  the topbar's typical rendered height (80px desktop matches the existing sidebar
+  convention; 60px mobile is a new estimate — nav and the desktop-only data-action
+  buttons are hidden on mobile, so the topbar is normally one short row, but it can wrap
+  to two lines on very narrow phones or while the sync-pill is showing). If the sticky
+  sheet header sits a few pixels off from flush against the topbar on an actual phone,
+  nudge the mobile `.row.head { top: ... }` value in `styles.css`'s media block up or
+  down to match — no other change needed.
+- Verified via Windows-path Read tool only this time (no code-behavior change, so no
+  jsdom re-run) — both files complete, no truncation, no leftover `muted` class.
+- Not yet verified live — do after deploying: on both desktop and mobile, scroll down a
+  sheet with several groups/categories and confirm (a) group rows read as a tinted, bold
+  band above their categories, and (b) the Category/Month/Annual header stays pinned
+  near the top of the screen instead of scrolling away.
