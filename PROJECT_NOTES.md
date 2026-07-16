@@ -272,3 +272,48 @@ z-index, later in paint order) draw over it.
 - Not yet tested live — do that after Jason deploys: on mobile, jump to July, tap
   "Cash Savings" (now a button), set Beginning Cash to 25000 via the modal, and confirm
   July's beginning-cash figure and the KPIs update.
+
+## 2026-07-16 (same day) — Mobile name-column truncation fix
+
+Root cause: the sheet name cell kept its 36px/24px desktop indent on mobile, and the
+fixed-width Fund/Manual badges + gear button squeezed the flexible name `<input>` to
+zero width — category/income names (e.g. "Car insurance") rendered blank on phones,
+worst on Fund rows (extra badge).
+
+- `styles.css`, inside `@media (max-width: 768px)`: `.row.cat .name` padding-left
+  36px→14px, `.row.income .name` 24px→12px (mobile-only overrides, same pattern as the
+  `.form-input` 16px override); `.row-tag { display:none; }` (badges hidden on mobile —
+  the same info is in the ⚙ settings modal); added
+  `.sheet-scroll .row.group { height:auto; min-height:44px; }` next to the existing
+  cat/income touch-target rule; bumped `.main`'s mobile bottom padding 96px→150px so the
+  FAB can't cover the sheet's last rows.
+- `js/budget.jsx`, `Sheet()`: added `monthColsMobile` (72px min per column, vs. desktop's
+  64px `monthCols`, which is now only used by nothing — see note below) and rebalanced
+  the mobile grid template from `18px minmax(112px,1fr) ... 80px 30px` to
+  `18px minmax(132px,1.4fr) ... 76px 30px` — the name column goes from a plain `1fr`
+  share to a `1.4fr` share with a higher floor (132px), at the cost of 4px off the
+  annual column and 8px off each month column's minimum.
+- `js/budget.jsx`: both `⚙` gear buttons (income row, category row) changed from
+  `&#9881;` to `&#9881;&#xFE0E;` — the U+FE0E variation selector forces the flat
+  text-style glyph; without it iOS renders a big colored emoji gear that visually broke
+  the row.
+- Verified two ways: (1) Windows-path Read tool confirmed both files complete, no
+  truncation. (2) Built a real render test — extracted `Sheet()` verbatim plus its
+  `data.js`/`shared.jsx` dependencies into a standalone harness, transpiled with
+  `@babel/standalone` (classic JSX runtime), and rendered with
+  `react-dom/server.renderToStaticMarkup` under three scenarios (mobile/July with a Fund
+  category, desktop/all-months, mobile/January). All 11 assertions passed: no render
+  errors, "Car insurance" and a Fund-flagged category name both appear in the rendered
+  HTML, the Fund badge is still in the DOM (CSS-hidden, not removed), both gear buttons
+  carry the U+FE0E selector, and the BalancesModal button from the prior batch only
+  appears when January isn't visible. Caveat: SSR has no layout engine, so this proves
+  the component/DOM output is correct but can't confirm the actual pixel-level
+  visual fix — that needs the live-site check below. Test harness left at
+  `outputs/sheet-test-source.js` + `outputs/run-sheet-test.js` (scratch, not part of the
+  repo).
+- Minor leftover: the original `monthCols` const in `Sheet()` is now unused (its only
+  caller — the mobile branch — was switched to `monthColsMobile`); harmless dead code,
+  not cleaned up since it wasn't part of the requested change.
+- Not yet verified live — do that after Jason deploys: check "Car insurance" and any
+  Fund-category rows show their full names on an actual phone, and confirm the ⚙ renders
+  as a flat gray glyph rather than a colored emoji.

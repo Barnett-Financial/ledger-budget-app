@@ -488,11 +488,15 @@ function Sheet(props) {
 
   const n  = visibleMonths.length;
   const monthCols = n > 0 ? 'repeat(' + n + ', minmax(64px, 1fr)) ' : '';
+  /* 2026-07-16: mobile-only month-column track, narrower so the name column
+     (below) can claim the freed width — names were truncating to nothing once
+     the Fund/Manual badges + gear squeezed the flexible name cell. */
+  const monthColsMobile = n > 0 ? 'repeat(' + n + ', minmax(72px, 1fr)) ' : '';
   /* Mobile corners: 18px dot / 80px annual / 30px delete-icon column — the
      delete column is wider than the dot column (row-del needs real tap room
      and must not overlap the annual amount to its left; see styles.css). */
   const ct = isMobile
-    ? '18px minmax(112px, 1fr) ' + monthCols + '80px 30px'
+    ? '18px minmax(132px, 1.4fr) ' + monthColsMobile + '76px 30px'
     : '28px 224px repeat(' + n + ', minmax(70px, 1fr)) 92px 28px';
   const rs = { gridTemplateColumns: ct };
 
@@ -596,7 +600,7 @@ function Sheet(props) {
             <input style={{ flex:1, minWidth:0 }} value={row.name} placeholder="Income source" onChange={e => setIncomeName(row.id, e.target.value)} />
             {(row.payrollDeductions && ((+row.payrollDeductions.retirement401k||0)+(+row.payrollDeductions.hsa||0)+(+row.payrollDeductions.pretaxPremiums||0)+(+row.payrollDeductions.otherPretax||0)) > 0) && <span className="row-tag">Pretax</span>}
             {row.fillMode === 'manual' && <span className="row-tag">Manual</span>}
-            <button className="row-gear" aria-label="Income settings" title="Income settings — fill mode &amp; payroll deductions" onClick={() => onOpenSettings({ kind:'income', id:row.id })}>&#9881;</button>
+            <button className="row-gear" aria-label="Income settings" title="Income settings — fill mode &amp; payroll deductions" onClick={() => onOpenSettings({ kind:'income', id:row.id })}>&#9881;&#xFE0E;</button>
           </div>
           {visibleMonths.map(m => (
             <div key={m} className="num month"><NumberInput value={row.monthly[m]} onChange={v => setIncomeCell(row.id, m, v)} /></div>
@@ -666,7 +670,7 @@ function Sheet(props) {
                   <input style={{ flex:1, minWidth:0 }} value={c.name} placeholder="Category" onChange={e => setCatName(g.id, c.id, e.target.value)} />
                   {c.isFund && <span className="row-tag fund" style={{ cursor:'help' }} title="Fund: this category accrues its monthly budget and draws down as you log expenses on the Track tab, showing a running balance instead of resetting each month.">Fund</span>}
                   {c.fillMode === 'manual' && <span className="row-tag">Manual</span>}
-                  <button className="row-gear" aria-label="Category settings" title="Category settings — fill mode, fund &amp; counts-as" onClick={() => onOpenSettings({ kind:'cat', gid:g.id, id:c.id })}>&#9881;</button>
+                  <button className="row-gear" aria-label="Category settings" title="Category settings — fill mode, fund &amp; counts-as" onClick={() => onOpenSettings({ kind:'cat', gid:g.id, id:c.id })}>&#9881;&#xFE0E;</button>
                 </div>
                 {visibleMonths.map(m => (
                   <div key={m} className="num month"><NumberInput value={c.monthly[m]} onChange={v => setCatCell(g.id, c.id, m, v)} dim /></div>

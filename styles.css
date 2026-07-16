@@ -1082,7 +1082,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   /* header wraps; tighter gutters */
   .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 16px; }
   .nav { display: none; }                 /* replaced by bottom tab bar */
-  .main { padding: 20px 16px 96px; }      /* clearance for bottom nav */
+  .main { padding: 20px 16px 150px; }     /* clearance for bottom nav + FAB */
 
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .page-head h1 { font-size: 32px; }
@@ -1203,6 +1203,13 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   }
   .gear-hint .row-gear { opacity: 0.7; animation: gearPulse 1.6s ease-in-out 3; }
 
+  /* 2026-07-16: Reclaim name-column width: drop desktop indents, hide state badges
+     (info still in ⚙ modal) — fixed-width Fund/Manual badges + gear were squeezing
+     the flexible name input to zero width, truncating names entirely. */
+  .row.cat .name { padding-left: 14px; }
+  .row.income .name { padding-left: 12px; }
+  .row-tag { display: none; }
+
   /* (5.3) enlarge the bucket-dot tap area to ≥32px while keeping the 8px dot */
   .bucket-dot {
     box-sizing: content-box;
@@ -1213,6 +1220,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
 
   /* (3.3) touch targets ≥44px: month picker, sheet input rows, year arrows, modal close */
   .sheet-scroll .row.cat, .sheet-scroll .row.income { height: auto; min-height: 44px; }
+  .sheet-scroll .row.group { height: auto; min-height: 44px; }
   .year-pill button { width: 40px; height: 40px; }
   .modal-close { width: 40px; height: 40px; font-size: 22px; }
   .sync-pill.error { min-height: 44px; padding: 0 14px; }
