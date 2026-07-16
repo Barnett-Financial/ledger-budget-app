@@ -33,6 +33,7 @@ function App({ session }) {
   const cloudReady = React.useRef(false);
   const saveTimer  = React.useRef(null);
   const userId = (session && session.user) ? session.user.id : null;
+  const [syncState, setSyncState] = React.useState('idle');   // 'idle' | 'saving' | 'saved' | 'error'
 
   React.useEffect(() => {
     let cancelled = false;
@@ -60,12 +61,40 @@ function App({ session }) {
   React.useEffect(() => {
     if (!window.sb || !userId || !cloudReady.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSyncState('saving');
     saveTimer.current = setTimeout(() => {
       window.sb.from('ledger_state')
         .upsert({ user_id: userId, data, updated_at: new Date().toISOString() })
-        .then(({ error }) => { if (error) console.warn('Ledger cloud save:', error.message); });
+        .then(({ error }) => {
+          if (error) console.warn('Ledger cloud save:', error.message);
+          setSyncState(error ? 'error' : 'saved');
+        });
     }, 800);
   }, [data, userId]);
+
+  /* Fix: flush the pending debounced save on tab switch/close so the last edit isn't lost. */
+  React.useEffect(() => {
+    const flush = () => {
+      if (!window.sb || !userId || !saveTimer.current) return;
+      clearTimeout(saveTimer.current); saveTimer.current = null;
+      window.sb.from('ledger_state')
+        .upsert({ user_id: userId, data, updated_at: new Date().toISOString() })
+        .then(({ error }) => setSyncState(error ? 'error' : 'saved'));
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', flush);
+    return () => { document.removeEventListener('visibilitychange', onVis);
+                   window.removeEventListener('pagehide', flush); };
+  }, [data, userId]);
+
+  const retrySync = () => {
+    if (!window.sb || !userId) return;
+    setSyncState('saving');
+    window.sb.from('ledger_state')
+      .upsert({ user_id: userId, data, updated_at: new Date().toISOString() })
+      .then(({ error }) => setSyncState(error ? 'error' : 'saved'));
+  };
 
   /* Fix 2.2: one-time notice that Ledger keeps a single budget across years. */
   const changeYear = (delta) => {
@@ -107,7 +136,17 @@ function App({ session }) {
       setData({ ...STARTER_DATA, year: new Date().getFullYear() });
   };
 
-  const signOut = () => { if (window.sb) window.sb.auth.signOut(); };
+  const signOut = () => {
+    if (window.sb) window.sb.auth.signOut();
+    /* Shared-device privacy: clear this user's cached budget so the next
+       person to sign in on this browser doesn't seed their new cloud
+       budget with the previous user's data. */
+    try {
+      localStorage.removeItem('ledger.data.v2');
+      localStorage.removeItem('ledger.ui.screen');
+      localStorage.removeItem('ledger.ui.month');
+    } catch (_) {}
+  };
 
   const initials = (data.name || 'Me').trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || 'ME';
 
@@ -135,6 +174,18 @@ function App({ session }) {
             <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
             {session && <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={signOut}>Sign out</button>}
           </div>
+          {session && syncState !== 'idle' && (
+            <button
+              className={'sync-pill' + (syncState === 'error' ? ' error' : '')}
+              onClick={syncState === 'error' ? retrySync : undefined}
+              disabled={syncState !== 'error'}
+              title={syncState === 'error' ? 'Tap to retry saving to the cloud' : undefined}
+            >
+              {syncState === 'saving' && 'Saving…'}
+              {syncState === 'saved'  && 'Saved ✓'}
+              {syncState === 'error'  && 'Not saved — tap to retry'}
+            </button>
+          )}
           <div className="avatar" title={data.name || 'Me'}>{initials}</div>
         </div>
       </header>

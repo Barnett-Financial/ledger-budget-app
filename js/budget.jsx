@@ -50,7 +50,6 @@ function generateCSVTemplate() {
 function BudgetScreen({ data, setData }) {
   const [colMode,            setColMode]            = React.useState('all');
   const [focusMonth,         setFocusMonth]         = React.useState(new Date().getMonth());
-  const [saved,              setSaved]              = React.useState(false);
   const [showInstructions,   setShowInstructions]   = React.useState(false);
   const [showDebtRateModal,  setShowDebtRateModal]  = React.useState(false);
   const [showGivingGoalModal, setShowGivingGoalModal] = React.useState(false);
@@ -204,7 +203,6 @@ function BudgetScreen({ data, setData }) {
   const setGivingGoal         = (v) => setData(prev => ({ ...prev, givingGoalPct:      v }));
   /* Fix #1: "Fill across from Jan" skips rows set to manual fill (e.g. one-time bonus). */
   const copyJan  = () => setData(prev => ({ ...prev, income: prev.income.map(r => r.fillMode === 'manual' ? r : ({ ...r, monthly: arr12(r.monthly[0]) })), groups: prev.groups.map(g => ({ ...g, cats: g.cats.map(c => c.fillMode === 'manual' ? c : ({ ...c, monthly: arr12(c.monthly[0]) })) })) }));
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
 
   /* Fix #1 / #6: per-row settings (fill mode, fund classification, payroll deductions) */
   const setCatSettings    = (gid, cid, patch) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, ...patch }) }) }));
@@ -288,7 +286,6 @@ function BudgetScreen({ data, setData }) {
           <button className="btn ghost" onClick={exportBudgetCSV}>Export budget (CSV)</button>
           <button className="btn ghost" onClick={importCSV}>Upload CSV</button>
           <button className="btn ghost" onClick={copyJan}>Fill across from Jan</button>
-          <button className="btn primary" onClick={handleSave}>{saved ? 'Saved ✓' : 'Save budget'}</button>
         </div>
       </div>
 

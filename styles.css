@@ -125,6 +125,24 @@ input, select  { font: inherit; color: inherit; }
   font-weight: 600;
   flex-shrink: 0;
 }
+.sync-pill {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sync-pill.error {
+  color: var(--warn);
+  border-color: var(--warn);
+  cursor: pointer;
+}
+.sync-pill.error:hover { background: var(--bg-soft); }
+.sync-pill:disabled { cursor: default; }
 
 /* ------------------------------- Main ---------------------------- */
 
@@ -1195,6 +1213,7 @@ select.form-input { cursor: pointer; padding-right: 8px; }
   .sheet-scroll .row.cat, .sheet-scroll .row.income { height: auto; min-height: 44px; }
   .year-pill button { width: 40px; height: 40px; }
   .modal-close { width: 40px; height: 40px; font-size: 22px; }
+  .sync-pill.error { min-height: 44px; padding: 0 14px; }
 
   /* (3.3) lift the FAB clear of the bottom nav + home indicator */
   .fab { bottom: calc(84px + env(safe-area-inset-bottom)); }

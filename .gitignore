@@ -12,5 +12,6 @@ desktop.ini
 .idea/
 *.swp
 *.backup.js
+*.backup.jsx
 *.backup.html
 *.backup.css

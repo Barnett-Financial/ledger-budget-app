@@ -100,3 +100,47 @@ Jason commits via GitHub Desktop.
   unchanged. Windows-path Read confirmed `index.html` shell and `js/app.jsx`.
 - Backups this session (verified byte-identical via bash `cp`, mount was clean):
   `index.2026-07-15-prerefactor.backup.html`, `styles.2026-07-15-prerefactor.backup.css`.
+
+## 2026-07-16 — Batch 2: trustworthy autosave + sync-status pill
+
+Implemented `REVIEW-2026-07-16.md`'s Batch 2 (removed the placebo "Save budget" button;
+autosave was already real — instant localStorage + 800ms-debounced Supabase upsert — it
+just had no visible/trustworthy status).
+
+- `js/budget.jsx` (`BudgetScreen`): removed `saved` state, `handleSave`, and the
+  "Save budget" button from `.page-head .actions`. The existing foot-note
+  ("Changes saved automatically.") is now the only save messaging on that screen.
+- `js/app.jsx` (`App`): added `syncState` ('idle'|'saving'|'saved'|'error'), set on the
+  debounced cloud-save effect (`'saving'` when scheduled, `'saved'`/`'error'` in the
+  upsert `.then`). Added a `visibilitychange`/`pagehide` flush effect so a pending
+  debounced save isn't lost if the tab is closed/hidden mid-edit. Added `retrySync()`
+  (re-runs the upsert) wired to the error pill's `onClick`.
+- Topbar: new `.sync-pill` next to the avatar — hidden when idle, shows "Saving…" /
+  "Saved ✓" / "Not saved — tap to retry". `.sync-pill.error` uses `var(--warn)` and gets
+  a ≥44px touch target under the 768px breakpoint.
+- `signOut` now clears `ledger.data.v2`, `ledger.ui.screen`, `ledger.ui.month` from
+  localStorage (shared-device privacy — otherwise the next person signing in on the same
+  browser seeds their new cloud budget with the previous user's data via the first-sign-in
+  cloud-seed path in the cloud-load effect).
+- **Caught a live truncation on `styles.css` from this session's own edits** (not the
+  Batch-1 deployed-file issue, which was already fixed locally before this session started
+  — see `styles.2026-07-16-pre-batch1.backup.css`). After adding the `.sync-pill` rules,
+  a bash-side read showed the file's tail (all `.auth-*` rules) missing and brace count
+  off by one (306 open / 305 close vs. a clean 305/305 backup). Recovered per
+  [[ledger-fs-sync-quirk]]: restored the last verified-complete backup
+  (`styles.2026-07-16-pre-syncpill.backup.css`, 1308 lines, 305/305 braces) and reapplied
+  both CSS additions with an asserting Python script instead of the editor. Result verified
+  balanced (310/310 braces) and complete (1327 lines) via both bash and the Windows-path
+  Read tool.
+- **New wrinkle for the FS-sync quirk:** this session bash's view of `js/app.jsx` and
+  `js/budget.jsx` also went stale/corrupt after edits (bash reported 267 lines with a
+  truncated `return` for `app.jsx`, and a null-byte-padded tail for `budget.jsx`), while
+  the Windows-path Read tool showed both files complete and correct throughout (313 and
+  980 lines respectively, matching expected line-count deltas from the edits). Treated
+  Read tool as ground truth per existing guidance and did not touch either file via bash.
+  So the quirk isn't limited to `index.html`/`styles.css` — any file in this repo can show
+  a stale bash view after an edit; **always verify via the Windows-path Read tool**, and
+  only reach for a bash-side reconstruction (backup + asserting script) if Read/Grep on
+  the Windows path itself shows a problem.
+- Not yet done: Jason still needs to commit (`js/budget.jsx`, `js/app.jsx`, `styles.css`,
+  `.gitignore`) via GitHub Desktop and confirm on the live Vercel URL.
