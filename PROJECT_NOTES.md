@@ -405,3 +405,48 @@ old `styles.css` (and possibly the old `index.html`, though that one appears una
 he should hard-refresh or clear site data for `ledger-budget-app-zeta.vercel.app` once
 after this deploys, to break out of the stale cache. After that, the versioned URLs
 should make every future deploy self-invalidating without needing a manual cache clear.
+
+## 2026-07-17 — Caching ruled out; real second bug found in the sticky header
+
+Jason did the hard refresh + cache clear on his phone after the `?v=` deploy and reported
+no change at all — header still not floating. Re-verified via a direct Vercel deployment
+fetch (not a browser cache path at all) that the live `index.html` and `styles.css` both
+already carry every change described above (`?v=20260717` now, all the mobile sticky CSS
+present, `x-vercel-cache: MISS` on both, so this wasn't a Vercel edge-cache issue either).
+That rules out caching completely as an explanation for this specific symptom — the
+`.sheet-scroll { overflow-x: visible; }` fix from the prior entry genuinely wasn't enough
+on its own.
+
+**Actual root cause:** `.sheet-wrap` (the outer rounded box around the sheet) has
+`overflow: hidden`. Per the CSS spec, *any* ancestor with a non-`visible` overflow
+establishes a scroll container and becomes the sticky positioning containing block for
+everything inside it — regardless of whether that ancestor actually has anything to
+scroll. Fixing `.sheet-scroll`'s overflow removed *one* such ancestor, but `.sheet-wrap`
+sitting one level further out was still there, still non-`visible`, and still binding
+`.row.head`'s sticky positioning to itself instead of to the real page viewport. This is
+one of the most common documented position:sticky footguns generally. It also explains why
+`.topbar` (sticky, zero overflow ancestors) has always worked fine while `.row.head`
+(sticky, nested inside two overflow-non-visible ancestors) never did — there was never a
+working precedent for this exact configuration anywhere else in the app to copy from.
+
+**Fix:** added `.sheet-wrap { overflow: visible; }` inside the `@media (max-width: 768px)`
+block, right after the existing `.sheet-scroll { overflow-x: visible; }` line. Mobile never
+needs either ancestor's clipping/scroll behavior (single visible month, no horizontal
+scroll — same reasoning as the earlier fix), so this closes the last gap. Desktop keeps
+`.sheet-wrap { overflow: hidden }` untouched, since desktop's sticky header was never
+reported broken and removing it there isn't needed.
+
+**Tradeoff, worth knowing about:** with `.sheet-wrap` open on mobile, the very top and
+bottom row's square corners can very slightly show past the box's rounded corners while
+scrolling, instead of being cleanly clipped. This is a minor cosmetic edge case in exchange
+for the sticky header actually working — flagged here in case it's visible enough on a
+real phone to warrant a follow-up (e.g. adding matching `border-radius` directly to the
+first/last row elements instead of relying on the wrapper to clip them).
+
+Bumped only `styles.css?v=20260716` → `?v=20260717` in `index.html` (the only file this
+edit touched — `data.js` and the `js/*.jsx` files are untouched, left at `?v=20260716`).
+
+**Not yet verified live** — do after Jason deploys: scroll a sheet on an actual phone and
+confirm the Category/Month/Annual header now stays pinned under the topbar while scrolling,
+and take a look at the top/bottom row corners to judge whether the cosmetic tradeoff above
+is actually noticeable.

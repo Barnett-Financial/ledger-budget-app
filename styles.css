@@ -1108,6 +1108,18 @@ select.form-input { cursor: pointer; padding-right: 8px; }
      page viewport, same as .topbar. */
   .sheet-scroll { overflow-x: visible; }
 
+  /* 2026-07-16 follow-up: the overflow-x fix above wasn't enough — .sheet-wrap
+     (the outer box, for the rounded border) has `overflow: hidden`, which on its
+     own still makes it a scroll container and the sticky containing block for
+     .row.head, even though .sheet-scroll is no longer one. Any ancestor with a
+     non-visible overflow does this, regardless of whether it actually has content
+     to scroll. On mobile there's nothing left to clip (no horizontal scroll, no
+     second axis), so open this one up too — .row.head can then stick straight
+     against the real page viewport, same as .topbar. Minor tradeoff: the very
+     first/last row's flat corners can peek very slightly past the box's rounded
+     corners on scroll; worth it for a working sticky header. */
+  .sheet-wrap { overflow: visible; }
+
   .page-head { flex-direction: column; align-items: flex-start; gap: 12px; }
   .page-head h1 { font-size: 32px; }
   .page-head .actions { width: 100%; }
