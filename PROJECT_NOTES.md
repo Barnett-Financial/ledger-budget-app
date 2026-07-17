@@ -450,3 +450,29 @@ edit touched — `data.js` and the `js/*.jsx` files are untouched, left at `?v=2
 confirm the Category/Month/Annual header now stays pinned under the topbar while scrolling,
 and take a look at the top/bottom row corners to judge whether the cosmetic tradeoff above
 is actually noticeable.
+
+## 2026-07-17 — Desktop sticky month header (same overflow-ancestor bug as mobile)
+
+Jason's screenshot showed the Category/Month header row rendering BELOW the first sheet
+rows on desktop and not floating on scroll. Root cause: base `.sheet-scroll { overflow-x:
+auto }` made it a scroll container, so it (not the page) was the sticky scrollport for
+`.row.head`. Since it never scrolls vertically, `top: 80px` permanently displaced the
+header 80px down INTO the sheet. The 2026-07-16 fix opened the overflows only inside the
+mobile media query — desktop had the identical bug at base level.
+
+Fix in `styles.css` base rules: `.sheet-wrap` → `overflow: visible`, `.sheet-scroll` →
+`overflow-x: visible`, and added `.sheet-wrap.tx-table { overflow: hidden }` so Track's
+transaction table keeps its clipped rounded corners (it has no sticky header). The mobile
+media-query overrides are now redundant but harmless; left in place with their comments.
+
+Tradeoff (desktop): windows narrower than the sheet's ~1210px min width now scroll the
+whole page horizontally instead of just the sheet. Frozen Category/Annual columns
+(`.sheet-scroll .row > *` sticky left/right) still freeze — they now stick against the
+page scrollport instead.
+
+Bumped `styles.css?v=20260717` → `?v=20260717b` in index.html.
+
+**Verify live after deploy:** on desktop, header must sit at the very top of the sheet and
+pin under the topbar while scrolling. If a small gap shows between topbar and stuck header,
+measure `document.querySelector('.topbar').offsetHeight` and set `.row.head { top }` to
+match (currently 80px desktop / 60px mobile). Re-check mobile still sticks too.

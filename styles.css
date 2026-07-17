@@ -245,9 +245,22 @@ button { -webkit-tap-highlight-color: transparent; }
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
-  overflow: hidden;
+  /* 2026-07-17: was overflow:hidden. Any ancestor with non-visible overflow
+     becomes the sticky containing block for .row.head — on desktop that
+     displaced the month header ~80px down INTO the sheet (below the first
+     rows) and stopped it floating. Same root cause as the 2026-07-16 mobile
+     fix; the budget sheet must be unclipped at ALL widths. Track's table
+     keeps its clipping via .sheet-wrap.tx-table below. */
+  overflow: visible;
 }
-.sheet-scroll { overflow-x: auto; }
+/* Track's transaction table has no sticky header — keep corners clipped there. */
+.sheet-wrap.tx-table { overflow: hidden; }
+/* 2026-07-17: was overflow-x:auto, which made .sheet-scroll a scroll container
+   and therefore the sticky scrollport for .row.head. Since it never scrolls
+   vertically, top:80px pushed the header down instead of floating it. Visible
+   means a too-narrow window overflows to a page-level horizontal scroll —
+   acceptable; same tradeoff already accepted on mobile. */
+.sheet-scroll { overflow-x: visible; }
 
 .row {
   display: grid;
