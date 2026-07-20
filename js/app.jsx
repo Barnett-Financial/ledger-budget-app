@@ -1,6 +1,154 @@
 /* app.jsx: App, AuthScreen, Root, and the ReactDOM mount (loads LAST) — split out of index.html (in-browser Babel, no bundler).
    Top-level function declarations stay global across text/babel scripts. */
 
+/* 2026-07-20: robust, multi-section CSV export. Replaces the old flat round-trip CSV.
+   A .csv file can't hold real worksheet tabs, so each "tab" here is a clearly labeled
+   section separated by a blank line — it opens cleanly in Excel / Google Sheets / Numbers,
+   where you can split sections onto their own tabs if you like. Numbers are written raw
+   (no $ or commas) so spreadsheets treat them as numbers, not text. */
+function exportBudgetCSV(data) {
+  const esc = (v) => { v = (v == null) ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const r2  = (n) => Math.round((+n || 0) * 100) / 100;
+  const rows = [];
+  const push = (...cells) => rows.push(cells);
+  const blank = () => rows.push([]);
+
+  const income = data.income || [];
+  const groups = data.groups || [];
+  const txns   = data.transactions || [];
+  const year   = data.year;
+
+  /* payroll-deduction helpers (mirror budget.jsx) */
+  const pd       = (r) => r.payrollDeductions || {};
+  const pdRetHsa = (r) => (+pd(r).retirement401k || 0) + (+pd(r).hsa || 0);
+  const pdOther  = (r) => (+pd(r).pretaxPremiums || 0) + (+pd(r).otherPretax || 0);
+  const pdSum    = (r) => pdRetHsa(r) + pdOther(r);
+  const payrollActive = income.some(r => pdSum(r) > 0);
+
+  /* monthly aggregates */
+  const incomeMonthly    = MONTHS.map((_, m) => sum(income.map(r => +r.monthly[m] || 0)));
+  const deductionMonthly = MONTHS.map((_, m) => sum(income.map(r => (r.monthly[m] > 0 ? pdSum(r)    : 0))));
+  const retHsaMonthly    = MONTHS.map((_, m) => sum(income.map(r => (r.monthly[m] > 0 ? pdRetHsa(r) : 0))));
+  const otherMonthly     = MONTHS.map((_, m) => sum(income.map(r => (r.monthly[m] > 0 ? pdOther(r)  : 0))));
+  const grossMonthly     = MONTHS.map((_, m) => incomeMonthly[m] + deductionMonthly[m]);
+  const outflowMonthly   = MONTHS.map((_, m) => sum(groups.map(g => sum(g.cats.map(c => +c.monthly[m] || 0)))));
+  const netMonthly       = MONTHS.map((_, m) => incomeMonthly[m] - outflowMonthly[m]);
+
+  const incomeAnnual  = sum(incomeMonthly);
+  const grossAnnual   = sum(grossMonthly);
+  const outflowAnnual = sum(outflowMonthly);
+  const netAnnual     = incomeAnnual - outflowAnnual;
+  const retHsaAnnual  = sum(retHsaMonthly);
+  const otherAnnual   = sum(otherMonthly);
+
+  /* bucket totals (budgeted) */
+  const bkt = { needs:0, wants:0, save:0, give:0, unalloc:0 };
+  groups.forEach(g => g.cats.forEach(c => { const a = sum(c.monthly); bkt[c.bucket] = (bkt[c.bucket] || 0) + a; }));
+  const denom = (payrollActive ? grossAnnual : incomeAnnual) || 1;
+  const pctOf = (n) => (Math.round((n / denom) * 1000) / 10) + '%';
+
+  /* ---------- Section: header ---------- */
+  push('LEDGER BUDGET EXPORT');
+  push('Name', data.name || 'Me');
+  push('Year', year);
+  push('Generated', new Date().toISOString().slice(0, 10));
+  blank();
+
+  /* ---------- Section: beginning balances ---------- */
+  push('BEGINNING BALANCES & PLAN ASSUMPTIONS');
+  push('Beginning cash', r2(data.beginningCash));
+  push('Beginning long-term investments', r2(data.beginningLongTerm));
+  push('Beginning debt', r2(data.beginningDebt));
+  push('Debt interest rate (%)', r2(data.debtInterestRate));
+  push('Plan cash yield (%)', r2(data.planCashYield));
+  push('Plan long-term yield (%)', r2(data.planLtYield));
+  if (data.givingGoalPct != null) push('Giving goal (% of income)', r2(data.givingGoalPct));
+  blank();
+
+  /* ---------- Section: income ---------- */
+  push('INCOME (take-home)', ...MONTHS, 'Annual');
+  income.forEach(r => push(r.name || 'Income', ...r.monthly.map(r2), r2(sum(r.monthly))));
+  push('Total income', ...incomeMonthly.map(r2), r2(incomeAnnual));
+  blank();
+
+  /* ---------- Section: pretax payroll deductions (only if used) ---------- */
+  if (payrollActive) {
+    push('PRETAX PAYROLL DEDUCTIONS', ...MONTHS, 'Annual');
+    push('Retirement / HSA', ...retHsaMonthly.map(r2), r2(retHsaAnnual));
+    push('Other pretax (premiums, etc.)', ...otherMonthly.map(r2), r2(otherAnnual));
+    push('Gross income (take-home + deductions)', ...grossMonthly.map(r2), r2(grossAnnual));
+    blank();
+  }
+
+  /* ---------- Section: budget categories ---------- */
+  push('BUDGET CATEGORIES', 'Group', 'Bucket', 'Fill', 'Fund', 'Flow', ...MONTHS, 'Annual');
+  groups.forEach(g => g.cats.forEach(c => {
+    push(
+      c.name || 'Category', g.name,
+      (BUCKETS[c.bucket] ? BUCKETS[c.bucket].label : c.bucket),
+      (c.fillMode === 'manual' ? 'Manual' : 'Fill right'),
+      (c.isFund ? 'Yes' : ''),
+      (c.flow && c.flow !== 'auto' ? c.flow : ''),
+      ...c.monthly.map(r2), r2(sum(c.monthly))
+    );
+  }));
+  push('Total outflow', '', '', '', '', '', ...outflowMonthly.map(r2), r2(outflowAnnual));
+  push('Net (income − outflow)', '', '', '', '', '', ...netMonthly.map(r2), r2(netAnnual));
+  blank();
+
+  /* ---------- Section: allocation summary ---------- */
+  push('ALLOCATION SUMMARY', 'Annual', '% of ' + (payrollActive ? 'gross' : 'income'));
+  push('Needs',  r2(bkt.needs),  pctOf(bkt.needs));
+  push('Wants',  r2(bkt.wants),  pctOf(bkt.wants));
+  push('Saving (budgeted)', r2(bkt.save), pctOf(bkt.save));
+  if (payrollActive) push('Pretax savings (401k/HSA)', r2(retHsaAnnual), pctOf(retHsaAnnual));
+  push('Giving', r2(bkt.give),  pctOf(bkt.give));
+  push('Unallocated / net', r2(netAnnual), pctOf(netAnnual));
+  push('Effective savings rate', r2(bkt.save + netAnnual + retHsaAnnual), pctOf(bkt.save + netAnnual + retHsaAnnual));
+  blank();
+
+  /* ---------- Section: tracked actuals (from the database) ---------- */
+  const catMeta = {};        /* id -> {name, group, bucket} */
+  groups.forEach(g => g.cats.forEach(c => { catMeta[c.id] = { name: c.name, group: g.name, bucket: c.bucket }; }));
+  const actualsByCat = {};   /* id -> [12] */
+  const ensure = (id) => (actualsByCat[id] || (actualsByCat[id] = MONTHS.map(() => 0)));
+  let anyActuals = false;
+  txns.forEach(t => {
+    const d = new Date(t.date + 'T00:00:00');
+    if (d.getFullYear() !== year) return;
+    ensure(t.categoryId)[d.getMonth()] += (+t.amount || 0);
+    anyActuals = true;
+  });
+  push('TRACKED ACTUALS — spent per category by month (' + year + ')');
+  if (!anyActuals) {
+    push('No expenses logged for ' + year + ' yet.');
+  } else {
+    push('Category', 'Group', 'Bucket', ...MONTHS, 'Actual total', 'Budgeted (annual)', 'Variance (budget − actual)');
+    const budgetedAnnualForCat = (id) => {
+      for (const g of groups) { const c = g.cats.find(x => x.id === id); if (c) return sum(c.monthly); }
+      return 0;
+    };
+    const colTotals = MONTHS.map(() => 0); let grandActual = 0, grandBudget = 0;
+    Object.keys(actualsByCat).forEach(id => {
+      const meta = catMeta[id] || { name: '(deleted category)', group: '', bucket: '' };
+      const arr  = actualsByCat[id];
+      const tot  = sum(arr);
+      const bud  = budgetedAnnualForCat(id);
+      arr.forEach((v, i) => colTotals[i] += v);
+      grandActual += tot; grandBudget += bud;
+      push(meta.name, meta.group, (BUCKETS[meta.bucket] ? BUCKETS[meta.bucket].label : meta.bucket),
+           ...arr.map(r2), r2(tot), r2(bud), r2(bud - tot));
+    });
+    push('Total spent', '', '', ...colTotals.map(r2), r2(grandActual), r2(grandBudget), r2(grandBudget - grandActual));
+  }
+  blank();
+
+  const csv = '﻿' + rows.map(row => row.map(esc).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'ledger-' + year + '-export.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
 /* ---- App shell ---- */
 function App({ session }) {
   /* Fix 1.1: remember the active tab and viewed month across refreshes. */
@@ -170,10 +318,9 @@ function App({ session }) {
             <button onClick={() => changeYear(1)} aria-label="Next year">›</button>
           </div>
           <div className="desktop-data-actions">
-            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={exportData}>Export</button>
-            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={importData}>Import</button>
-            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={resetData}>Reset</button>
-            {session && <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={signOut}>Sign out</button>}
+            {/* 2026-07-20: collapsed the loose Export/Import/Reset/Sign-out buttons into one
+                menu so Reset can't be hit by accident. Opens the same panel as the mobile "More" tab. */}
+            <button className="btn ghost" style={{ fontSize:12, padding:'5px 12px' }} onClick={() => setShowDataMenu(true)} aria-haspopup="menu">Menu ▾</button>
           </div>
           {session && syncState !== 'idle' && (
             <button
@@ -226,9 +373,10 @@ function App({ session }) {
         <div className="data-menu-overlay" onClick={() => setShowDataMenu(false)}>
           <div className="data-menu" onClick={e => e.stopPropagation()}>
             <div className="dm-head">
-              <h4>Data</h4>
+              <h4>Menu</h4>
               <button className="modal-close" onClick={() => setShowDataMenu(false)} aria-label="Close">&#215;</button>
             </div>
+            <button className="dm-item" onClick={() => { setShowDataMenu(false); exportBudgetCSV(data); }}><span className="dm-ico">&#8681;</span>Export budget (CSV)</button>
             <button className="dm-item" onClick={() => { setShowDataMenu(false); exportData(); }}><span className="dm-ico">&#8595;</span>Export data (.json)</button>
             <button className="dm-item" onClick={() => { setShowDataMenu(false); importData(); }}><span className="dm-ico">&#8593;</span>Import data (.json)</button>
             <button className="dm-item" onClick={() => { setShowDataMenu(false); resetData(); }}><span className="dm-ico">&#8635;</span>Reset to starter data</button>
