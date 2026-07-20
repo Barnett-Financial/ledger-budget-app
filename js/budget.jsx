@@ -178,8 +178,10 @@ function BudgetScreen({ data, setData }) {
     return [focusMonth];
   }, [isMobile, mobileAnnual, colMode, focusMonth]);
 
-  const setIncomeCell      = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, monthly: r.monthly.map((x, i) => i === m ? val : x) } : r) }));
-  const setCatCell         = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => i === m ? val : x) }) }) }));
+  /* 2026-07-20: auto fill-right. On a "Fill right" row (fillMode !== 'manual') a value you
+     type flows into every later month automatically; a "Manual" row sets only that one cell. */
+  const setIncomeCell      = (id, m, val) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id !== id ? r : { ...r, monthly: r.monthly.map((x, i) => (i === m || (r.fillMode !== 'manual' && i > m)) ? val : x) }) }));
+  const setCatCell         = (gid, cid, m, val) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, monthly: c.monthly.map((x, i) => (i === m || (c.fillMode !== 'manual' && i > m)) ? val : x) }) }) }));
   const setIncomeName      = (id, name) => setData(prev => ({ ...prev, income: prev.income.map(r => r.id === id ? { ...r, name } : r) }));
   const setCatName         = (gid, cid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, cats: g.cats.map(c => c.id !== cid ? c : { ...c, name }) }) }));
   const setGroupName       = (gid, name) => setData(prev => ({ ...prev, groups: prev.groups.map(g => g.id !== gid ? g : { ...g, name }) }));
@@ -282,12 +284,11 @@ function BudgetScreen({ data, setData }) {
           <h1>{data.year} <em>cash budget</em></h1>
           <div className="sub">Estimate every dollar in and out, month by month.</div>
         </div>
-        <div className="actions">
-          <button className="btn ghost" onClick={downloadCSVTemplate}>CSV template</button>
-          <button className="btn ghost" onClick={exportBudgetCSV}>Export budget (CSV)</button>
-          <button className="btn ghost" onClick={importCSV}>Upload CSV</button>
-          <button className="btn ghost" onClick={copyJan}>Fill across from Jan</button>
-        </div>
+        {/* 2026-07-20: removed the CSV template / Export CSV / Upload CSV / "Fill across from Jan"
+            buttons. Export CSV now lives in the top-bar Menu; rows fill right automatically as you
+            type (see setCatCell / setIncomeCell). The parseCSV / generateCSVTemplate / importCSV /
+            exportBudgetCSV / copyJan helpers above are intentionally left in place (dormant) so CSV
+            import + template can be re-added later without rebuilding them. */}
       </div>
 
       <div style={{ marginBottom:20, border:'1px solid var(--line)', borderRadius:'var(--r-md)', background:'var(--surface)', overflow:'hidden' }}>
@@ -303,7 +304,7 @@ function BudgetScreen({ data, setData }) {
               <li><strong>Cash savings:</strong> Categories with <em>Savings</em> or <em>Cash Savings</em> in the name feed the <strong>Beginning Cash</strong> balance, compounding monthly at the Cash Yield set in the Plan tab.</li>
               <li><strong>Long-term investments:</strong> Categories with <em>Retirement</em> or <em>Long-term</em> in the name feed the <strong>Beginning Long-term Invest</strong> balance, compounding at the Long-term Yield from the Plan tab.</li>
               <li><strong>Debt payments:</strong> Categories with <em>Debt</em> or <em>Interest</em> in the name automatically reduce the Beginning Debt balance each month.</li>
-              <li><strong>Row settings (⚙ gear):</strong> Click the gear on any income or category row to open its settings. There you can switch a row to <em>Fill manually</em> so <em>Fill across from Jan</em> skips it (useful for one-time items like a bonus), mark a category as a <em>Fund</em> (it accrues its monthly budget and draws down as you log expenses on the Track tab), or record <em>pretax payroll deductions</em> (401k, HSA, premiums) on an income source for a more accurate savings rate.</li>
+              <li><strong>Row settings (⚙ gear):</strong> Click the gear on any income or category row to open its settings. There you can switch a row to <em>Fill manually</em> so it won't auto-fill (by default a value you type flows to every later month automatically; manual is useful for one-time items like a bonus), mark a category as a <em>Fund</em> (it accrues its monthly budget and draws down as you log expenses on the Track tab), or record <em>pretax payroll deductions</em> (401k, HSA, premiums) on an income source for a more accurate savings rate.</li>
               <li><strong>Beginning asset/debt balances</strong> are editable in January only. Subsequent months are auto-computed.</li>
             </ul>
           </div>
@@ -893,11 +894,11 @@ function RowSettingsModal({ kind, row, netMonthlyAvg = 0, deductionCatMatches = 
           <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:4 }}>
             <label style={{ display:'flex', alignItems:'flex-start', gap:8, cursor:'pointer', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
               <input type="radio" name="fillMode" checked={fillMode === 'across'} onChange={() => setFillMode('across')} style={{ marginTop:2 }} />
-              <span><strong>Fill across</strong> — "Fill across from Jan" copies January to every month.</span>
+              <span><strong>Fill right</strong> — a value you type flows to every later month automatically.</span>
             </label>
             <label style={{ display:'flex', alignItems:'flex-start', gap:8, cursor:'pointer', fontWeight:400, textTransform:'none', letterSpacing:0 }}>
               <input type="radio" name="fillMode" checked={fillMode === 'manual'} onChange={() => setFillMode('manual')} style={{ marginTop:2 }} />
-              <span><strong>Fill manually</strong> — leave this row alone (e.g. a one-time bonus).</span>
+              <span><strong>Fill manually</strong> — each month is independent; typing in one cell won't touch the others (e.g. a one-time bonus).</span>
             </label>
           </div>
         </div>
