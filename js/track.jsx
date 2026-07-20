@@ -6,6 +6,8 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogH
   const [showModal,        setShowModal]        = React.useState(false);
   const [showTransactions, setShowTransactions] = React.useState(false);
   const [defaultCatId,     setDefaultCatId]     = React.useState(null);
+  /* 2026-07-20: 'month' = the existing per-month card/list view; 'accumulated' = totals across a range. */
+  const [view,             setView]             = React.useState('month');
 
   /* Fix #3: open the Log-expense modal when the mobile FAB routes here */
   React.useEffect(() => {
@@ -77,6 +79,8 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogH
   const openModalForCat = (catId) => { setDefaultCatId(catId); setShowModal(true); };
   const handleModalClose = () => { setShowModal(false); setDefaultCatId(null); };
 
+  if (view === 'accumulated') return <AccumulatedView data={data} year={data.year} onBack={() => setView('month')} />;
+
   return (
     <div>
       <div className="page-head">
@@ -93,6 +97,7 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogH
           <button className="btn ghost" onClick={() => setMonthIdx((monthIdx + 11) % 12)}>‹ {MONTHS_LONG[(monthIdx + 11) % 12]}</button>
           <button className="btn ghost" onClick={() => setMonthIdx((monthIdx + 1) % 12)}>{MONTHS_LONG[(monthIdx + 1) % 12]} ›</button>
           <button className="btn ghost" onClick={() => setShowTransactions(v => !v)}>{showTransactions ? 'Card view' : 'Transactions'}</button>
+          <button className="btn ghost" onClick={() => setView('accumulated')}>Totals</button>
           <button className="btn primary" onClick={() => setShowModal(true)}>Log expense</button>
         </div>
       </div>
@@ -163,6 +168,169 @@ function TrackScreen({ data, setData, monthIdx, setMonthIdx, autoLog, onAutoLogH
         <LogExpenseModal data={data} monthIdx={monthIdx} year={data.year}
           defaultCategoryId={defaultCatId} onSave={addTransaction} onClose={handleModalClose} />
       )}
+    </div>
+  );
+}
+
+/* 2026-07-20: Accumulated actuals view. All expenses already persist to the database
+   (whole `data` blob incl. transactions), so this view just aggregates them: totals per
+   category over a month range you pick, plus a full 12-month grid. Read-only. */
+function AccumulatedView({ data, year, onBack }) {
+  const now = new Date();
+  const defaultTo = (now.getFullYear() === year) ? now.getMonth() : 11;
+  const [from, setFrom] = React.useState(0);
+  const [to,   setTo]   = React.useState(defaultTo);
+  const lo = Math.min(from, to), hi = Math.max(from, to);
+
+  const cats = [];
+  data.groups.forEach(g => g.cats.forEach(c => cats.push({ id:c.id, name:c.name, group:g.name, bucket:c.bucket, monthly:c.monthly })));
+
+  const actByCat = {};
+  const ens = id => (actByCat[id] || (actByCat[id] = Array.from({ length:12 }, () => 0)));
+  const unmatched = Array.from({ length:12 }, () => 0); let hasUnmatched = false;
+  (data.transactions || []).forEach(t => {
+    const d = new Date(t.date + 'T00:00:00');
+    if (d.getFullYear() !== year) return;
+    const m = d.getMonth();
+    if (cats.some(c => c.id === t.categoryId)) ens(t.categoryId)[m] += (+t.amount || 0);
+    else { unmatched[m] += (+t.amount || 0); hasUnmatched = true; }
+  });
+
+  const rangeSum = arr => { let s = 0; for (let i = lo; i <= hi; i++) s += (arr[i] || 0); return s; };
+  const rows = cats.map(c => {
+    const a = actByCat[c.id] || Array(12).fill(0);
+    return { ...c, act12:a, actual: rangeSum(a), budget: rangeSum(c.monthly) };
+  }).filter(r => r.actual > 0 || r.budget > 0);
+
+  const totActual = sum(rows.map(r => r.actual)) + (hasUnmatched ? rangeSum(unmatched) : 0);
+  const totBudget = sum(rows.map(r => r.budget));
+  const anyActualYear = rows.some(r => r.act12.some(v => v > 0)) || hasUnmatched;
+  const rangeLabel = (lo === hi) ? MONTHS_LONG[lo] : (MONTHS[lo] + '–' + MONTHS[hi]);
+
+  const cell = { padding:'7px 10px', fontFamily:'var(--mono)', fontVariantNumeric:'tabular-nums', textAlign:'right', whiteSpace:'nowrap' };
+  const th   = { padding:'7px 10px', fontSize:11, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--muted)', whiteSpace:'nowrap', textAlign:'right' };
+  const stickL = { position:'sticky', left:0, background:'var(--surface)', zIndex:1 };
+
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1>Accumulated <em>actuals</em></h1>
+          <div className="sub">What you've actually spent per category, totaled across the months you pick — from every expense saved to your account. Showing {rangeLabel} {year}.</div>
+        </div>
+        <div className="actions">
+          <button className="btn ghost" onClick={onBack}>‹ Back to month</button>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', gap:14, alignItems:'flex-end', flexWrap:'wrap', marginBottom:18 }}>
+        <label style={{ fontSize:12, color:'var(--muted)', display:'flex', flexDirection:'column', gap:4 }}>From
+          <select className="form-input" style={{ minWidth:130 }} value={from} onChange={e => setFrom(+e.target.value)}>
+            {MONTHS_LONG.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize:12, color:'var(--muted)', display:'flex', flexDirection:'column', gap:4 }}>To
+          <select className="form-input" style={{ minWidth:130 }} value={to} onChange={e => setTo(+e.target.value)}>
+            {MONTHS_LONG.map((m, i) => <option key={i} value={i}>{m}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="kpis">
+        <Kpi label={'Spent · ' + rangeLabel} value={totActual} />
+        <Kpi label={'Budgeted · ' + rangeLabel} value={totBudget} />
+        <Kpi label="Remaining" value={totBudget - totActual} tone={(totBudget - totActual) < 0 ? 'neg' : (totActual > 0 ? 'pos' : undefined)} />
+      </div>
+
+      {!anyActualYear ? (
+        <div className="tx-empty" style={{ marginTop:20 }}>No expenses logged for {year} yet. Log expenses on the month view and they'll accumulate here.</div>
+      ) : (
+        <React.Fragment>
+          <div className="sheet-wrap" style={{ marginTop:20, overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid var(--line)' }}>
+                  <th style={{ ...th, textAlign:'left' }}>Category</th>
+                  <th style={{ ...th, textAlign:'left' }}>Group</th>
+                  <th style={th}>Spent</th>
+                  <th style={th}>Budgeted</th>
+                  <th style={th}>Variance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {BUCKET_ORDER.map(b => {
+                  const brows = rows.filter(r => r.bucket === b && (r.actual > 0 || r.budget > 0));
+                  if (!brows.length) return null;
+                  return (
+                    <React.Fragment key={b}>
+                      <tr><td colSpan={5} style={{ padding:'10px 10px 4px', fontSize:10.5, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--muted)' }}>
+                        <span className={'bucket-dot ' + b} style={{ margin:'0 6px 0 0' }}></span>{BUCKETS[b].label}</td></tr>
+                      {brows.map(r => {
+                        const v = r.budget - r.actual;
+                        return (
+                          <tr key={r.id} style={{ borderTop:'1px solid var(--line-soft)' }}>
+                            <td style={{ padding:'7px 10px' }}>{r.name}</td>
+                            <td style={{ padding:'7px 10px', color:'var(--muted)' }}>{r.group}</td>
+                            <td style={cell}>{fmt(r.actual, { zero:'$0' })}</td>
+                            <td style={{ ...cell, color:'var(--muted)' }}>{fmt(r.budget, { zero:'$0' })}</td>
+                            <td style={{ ...cell, color: v < 0 ? 'var(--warn)' : 'var(--save)' }}>{fmt(v, { sign:true, zero:'$0' })}</td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
+                {hasUnmatched && rangeSum(unmatched) > 0 && (
+                  <tr style={{ borderTop:'1px solid var(--line-soft)' }}>
+                    <td style={{ padding:'7px 10px' }}>Uncategorized / deleted</td><td></td>
+                    <td style={cell}>{fmt(rangeSum(unmatched), { zero:'$0' })}</td>
+                    <td style={{ ...cell, color:'var(--muted)' }}>—</td><td style={{ ...cell, color:'var(--muted)' }}>—</td>
+                  </tr>
+                )}
+                <tr style={{ borderTop:'2px solid var(--line)', fontWeight:600 }}>
+                  <td style={{ padding:'9px 10px' }}>Total</td><td></td>
+                  <td style={cell}>{fmt(totActual, { zero:'$0' })}</td>
+                  <td style={cell}>{fmt(totBudget, { zero:'$0' })}</td>
+                  <td style={{ ...cell, color:(totBudget - totActual) < 0 ? 'var(--warn)' : 'var(--save)' }}>{fmt(totBudget - totActual, { sign:true, zero:'$0' })}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style={{ margin:'26px 0 10px', fontSize:14 }}>Full year by month <span style={{ color:'var(--muted)', fontWeight:400, fontSize:12 }}>· shaded columns are outside your selected range</span></h3>
+          <div className="sheet-wrap" style={{ overflowX:'auto' }}>
+            <table style={{ borderCollapse:'collapse', fontSize:12.5, minWidth:820 }}>
+              <thead>
+                <tr style={{ borderBottom:'1px solid var(--line)' }}>
+                  <th style={{ ...th, textAlign:'left', ...stickL }}>Category</th>
+                  {MONTHS.map((m, i) => <th key={i} style={{ ...th, opacity:(i >= lo && i <= hi) ? 1 : 0.4 }}>{m}</th>)}
+                  <th style={th}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.filter(r => r.act12.some(v => v > 0)).map(r => (
+                  <tr key={r.id} style={{ borderTop:'1px solid var(--line-soft)' }}>
+                    <td style={{ padding:'6px 10px', whiteSpace:'nowrap', ...stickL }}>
+                      <span className={'bucket-dot ' + r.bucket} style={{ margin:'0 6px 0 0' }}></span>{r.name}</td>
+                    {r.act12.map((v, i) => <td key={i} style={{ ...cell, color: v > 0 ? 'var(--ink)' : 'var(--muted)', opacity:(i >= lo && i <= hi) ? 1 : 0.45 }}>{v > 0 ? fmt(v, { zero:'$0' }) : '·'}</td>)}
+                    <td style={{ ...cell, fontWeight:600 }}>{fmt(sum(r.act12), { zero:'$0' })}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop:'2px solid var(--line)', fontWeight:600 }}>
+                  <td style={{ padding:'7px 10px', ...stickL }}>Total</td>
+                  {MONTHS.map((_, i) => { const c = sum(rows.map(r => r.act12[i])) + (hasUnmatched ? unmatched[i] : 0); return <td key={i} style={{ ...cell, opacity:(i >= lo && i <= hi) ? 1 : 0.45 }}>{c > 0 ? fmt(c, { zero:'$0' }) : '·'}</td>; })}
+                  <td style={cell}>{fmt(sum(rows.map(r => sum(r.act12))) + (hasUnmatched ? sum(unmatched) : 0), { zero:'$0' })}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </React.Fragment>
+      )}
+
+      <div className="foot-note" style={{ marginTop:18 }}>
+        <span>Totals come from every expense saved to your account and update as you log more.</span>
+        <span>Use Export budget (CSV) in the Menu to download this alongside your budget.</span>
+      </div>
     </div>
   );
 }

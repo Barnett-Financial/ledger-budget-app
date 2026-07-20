@@ -727,9 +727,11 @@ function Sheet(props) {
 
 function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incomeMonthlyAvg, groupTotals, groups, netAnnual = 0, grossIncomeAnnual = 0, retHsaAnnual = 0, otherDeductAnnual = 0, payrollActive = false, givingGoalPct, onGivingGoalClick }) {
   /* Fix 4.2: when payroll deductions are set, the WHOLE component uses gross as
-     the denominator and shows pretax dollars as their own bar segments, so the
-     bar, legend, and rules all share one baseline (gross). Without deductions
-     it behaves exactly as before (take-home baseline). */
+     the denominator so the bar, legend, and rules all share one baseline (gross).
+     Without deductions it behaves exactly as before (take-home baseline).
+     2026-07-20: pretax savings (401k/HSA) are folded into the single Saving segment
+     rather than drawn as a separate lighter block; only "other" pretax deductions
+     (premiums, etc.) still show as their own muted segment. */
   const denom      = (payrollActive ? grossIncomeAnnual : incomeAnnual) || 1;
   /* Fix #2: fold net (under/over allocation) into Saving so leftover cash is saved. */
   const saveWithNet = bucketAnnual.save + netAnnual;
@@ -761,8 +763,8 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
       <div className="alloc-bar">
         <div className="seg-needs" style={{ width: seg(bucketAnnual.needs) + '%' }}></div>
         <div className="seg-wants" style={{ width: seg(bucketAnnual.wants) + '%' }}></div>
-        <div className="seg-save"  style={{ width: seg(saveWithNet)        + '%' }}></div>
-        {showPretax && <div className="seg-save" style={{ width: seg(retHsaAnnual) + '%', opacity:0.6 }}></div>}
+        {/* 2026-07-20: show savings as ONE segment (pretax 401k/HSA folded in) instead of splitting it. */}
+        <div className="seg-save"  style={{ width: seg(saveWithNet + retHsaAnnual) + '%' }}></div>
         {showOther  && <div style={{ width: seg(otherDeductAnnual) + '%', height:'100%', background:'var(--muted)', opacity:0.35 }}></div>}
         <div className="seg-give"  style={{ width: seg(bucketAnnual.give)  + '%' }}></div>
         {showUnalloc && <div className="seg-left" style={{ width: seg(bucketAnnual.unalloc) + '%' }}></div>}
@@ -770,8 +772,8 @@ function AllocationSummary({ bucketAnnual, bucketMonthlyAvg, incomeAnnual, incom
       <div className="alloc-legend">
         <LegItem dot="needs" label="Needs"  amt={bucketAnnual.needs} p={bucketAnnual.needs/denom} avg={bucketMonthlyAvg.needs} />
         <LegItem dot="wants" label="Wants"  amt={bucketAnnual.wants} p={bucketAnnual.wants/denom} avg={bucketMonthlyAvg.wants} />
-        <LegItem dot="save"  label="Saving" amt={saveWithNet}        p={saveWithNet /denom}       avg={saveAvg} />
-        {showPretax && <LegItem dot="save" label="Pretax savings"           amt={retHsaAnnual}     p={retHsaAnnual/denom}     avg={retHsaAnnual/12} />}
+        <LegItem dot="save"  label="Saving" amt={saveWithNet + retHsaAnnual} p={(saveWithNet + retHsaAnnual)/denom} avg={(saveWithNet + retHsaAnnual)/12} />
+
         {showOther  && <LegItem dot="left" label="Other payroll deductions" amt={otherDeductAnnual} p={otherDeductAnnual/denom} avg={otherDeductAnnual/12} />}
         <LegItem dot="give"  label="Giving" amt={bucketAnnual.give}  p={bucketAnnual.give /denom} avg={bucketMonthlyAvg.give} />
         {showUnalloc && <LegItem dot="left" label="Unallocated" amt={bucketAnnual.unalloc} p={bucketAnnual.unalloc/denom} avg={bucketMonthlyAvg.unalloc} />}
